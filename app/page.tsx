@@ -36,7 +36,8 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     try {
-      const peticion = await fetch("http://127.0.0.1:8000/simular", {
+      // AQUÍ ESTÁ LA CONEXIÓN A TU NUEVO SERVIDOR EN RENDER EN ESTADOS UNIDOS
+      const peticion = await fetch("https://simulador-backend-ytbv.onrender.com/simular", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
@@ -51,7 +52,7 @@ export default function Home() {
         status: 'completed'
       }]);
     } catch (error) {
-      alert("Error conectando al motor Python.");
+      alert("Error conectando al motor Python en Render. Revisa que el servicio esté activo.");
     }
     setLoading(false);
   };
@@ -72,7 +73,6 @@ export default function Home() {
     document.body.removeChild(link);
   };
 
-  // --- CORRECCIÓN DE TYPESCRIPT AQUÍ ---
   const handleNested = (category: string, field: string, value: number) => {
     setFormData(prev => ({ 
       ...prev, 
