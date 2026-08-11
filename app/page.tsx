@@ -21,6 +21,33 @@ export default function Home() {
 
   const [res, setRes] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  
+  // --- ESTADOS DE LA INTELIGENCIA ARTIFICIAL ---
+  const [consejoIA, setConsejoIA] = useState("");
+  const [cargandoIA, setCargandoIA] = useState(false);
+
+  // --- FUNCIÓN PARA PEDIR CONSEJO A DEEPSEEK ---
+  const pedirConsejo = async (rol: string) => {
+    setCargandoIA(true);
+    setConsejoIA("El consejero está analizando tus números...");
+    try {
+      const response = await fetch('https://simulador-backend-ytbv.onrender.com/consejero', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rol: rol,
+          idea: formData.nombre_idea,
+          sector: formData.sector,
+          metricas: res.metricas
+        })
+      });
+      const data = await response.json();
+      setConsejoIA(data.consejo);
+    } catch (error) {
+      setConsejoIA("Hubo un error al contactar al consejero.");
+    }
+    setCargandoIA(false);
+  };
 
   const cargarHistorial = async () => {
     const { data } = await supabase.from('simulations').select('*').order('created_at', { ascending: false });
@@ -36,7 +63,6 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     try {
-      // AQUÍ ESTÁ LA CONEXIÓN A TU NUEVO SERVIDOR EN RENDER EN ESTADOS UNIDOS
       const peticion = await fetch("https://simulador-backend-ytbv.onrender.com/simular", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,9 +100,9 @@ export default function Home() {
   };
 
   const handleNested = (category: string, field: string, value: number) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      [category]: { ...(prev as any)[category], [field]: value || 0 } 
+    setFormData(prev => ({
+      ...prev,
+      [category]: { ...(prev as any)[category], [field]: value || 0 }
     }));
   };
 
@@ -124,7 +150,7 @@ export default function Home() {
                     <div><label className="block text-sm font-semibold mb-1">Sector</label><input type="text" value={formData.sector} onChange={e => handleSimple('sector', e.target.value)} className="w-full p-2 border rounded bg-slate-50" /></div>
                   </div>
                 </section>
-
+                
                 <section>
                   <div className="flex justify-between items-end border-b pb-2 mb-4">
                     <h2 className="text-xl font-bold text-indigo-600">2. Desglose de Inversión Inicial</h2>
@@ -147,7 +173,7 @@ export default function Home() {
 
                 <section>
                   <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">4. Gastos Mensuales Fijos (S/)</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {Object.keys(formData.gastos_fijos).map(key => (
                       <div key={key}><label className="block text-sm font-semibold mb-1 capitalize">{key.replace('_', ' ')}</label><input type="number" value={(formData.gastos_fijos as any)[key]} onChange={e => handleNested('gastos_fijos', key, parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50" /></div>
                     ))}
@@ -157,9 +183,9 @@ export default function Home() {
                 <section>
                   <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">5. Proyección de Ventas (Mensual)</h2>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><label className="block text-sm font-semibold mb-1 text-rose-600">Pesimista</label><input type="number" value={formData.ventas.pesimista} onChange={e => handleNested('ventas', 'pesimista', parseInt(e.target.value))} className="w-full p-2 border border-rose-200 rounded bg-slate-50" /></div>
-                    <div><label className="block text-sm font-bold mb-1 text-indigo-600">Base (Realista)</label><input type="number" value={formData.ventas.base} onChange={e => handleNested('ventas', 'base', parseInt(e.target.value))} className="w-full p-2 border-2 border-indigo-300 rounded bg-indigo-50" /></div>
-                    <div><label className="block text-sm font-semibold mb-1 text-emerald-600">Optimista</label><input type="number" value={formData.ventas.optimista} onChange={e => handleNested('ventas', 'optimista', parseInt(e.target.value))} className="w-full p-2 border border-emerald-200 rounded bg-slate-50" /></div>
+                    <div><label className="block text-sm font-bold mb-1 text-rose-600">Pesimista</label><input type="number" value={formData.ventas.pesimista} onChange={e => handleNested('ventas', 'pesimista', parseInt(e.target.value))} className="w-full p-2 border border-rose-200 rounded bg-slate-50" /></div>
+                    <div><label className="block text-sm font-bold mb-1 text-indigo-600">Base (Realista)</label><input type="number" value={formData.ventas.base} onChange={e => handleNested('ventas', 'base', parseInt(e.target.value))} className="w-full p-2 border border-indigo-300 rounded bg-indigo-50" /></div>
+                    <div><label className="block text-sm font-bold mb-1 text-emerald-600">Optimista</label><input type="number" value={formData.ventas.optimista} onChange={e => handleNested('ventas', 'optimista', parseInt(e.target.value))} className="w-full p-2 border border-emerald-200 rounded bg-slate-50" /></div>
                     <div><label className="block text-sm font-semibold mb-1">Crecimiento Mensual (%)</label><input type="number" value={formData.ventas.crecimiento_mensual} onChange={e => handleNested('ventas', 'crecimiento_mensual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50" /></div>
                   </div>
                 </section>
@@ -177,7 +203,7 @@ export default function Home() {
                   <div className={`p-5 border-2 rounded-xl shadow-sm text-center ${promedioMensual >= 0 ? 'bg-emerald-50 border-emerald-400' : 'bg-rose-50 border-rose-400'}`}>
                     <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Resultado Mensual Estimado</h3>
                     <p className={`text-4xl font-black my-2 ${promedioMensual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {promedioMensual >= 0 ? '+' : '-'} S/ {Math.abs(Math.round(promedioMensual))}
+                      {promedioMensual >= 0 ? '+ ' : '- '}S/ {Math.abs(Math.round(promedioMensual))}
                     </p>
                     <p className="text-xs font-medium text-slate-500">Promedio calculado sobre el primer año.</p>
                   </div>
@@ -236,6 +262,25 @@ export default function Home() {
                       </ResponsiveContainer>
                     </div>
                   </div>
+
+                  {/* --- PANEL DEL CONSEJERO IA --- */}
+                  <div className="mt-6 p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    <h3 className="font-bold text-indigo-900 mb-4 text-lg">🤖 Consejero de Inteligencia Artificial (DeepSeek)</h3>
+                    <p className="text-sm text-indigo-700 mb-4">Elige un rol para recibir asesoría personalizada sobre esta simulación:</p>
+                    
+                    <div className="flex gap-2 mb-4 flex-wrap">
+                      <button onClick={() => pedirConsejo('auditor')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700">🧐 Auditor Financiero</button>
+                      <button onClick={() => pedirConsejo('marketing')} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-500">🚀 Director de Marketing</button>
+                      <button onClick={() => pedirConsejo('operaciones')} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-500">⚙️ Asesor Operativo</button>
+                    </div>
+
+                    {consejoIA && (
+                      <div className="p-4 bg-white rounded-lg border border-indigo-100 shadow-inner whitespace-pre-wrap text-sm text-slate-700">
+                        {cargandoIA ? "Procesando millones de datos..." : consejoIA}
+                      </div>
+                    )}
+                  </div>
+                  {/* --- FIN PANEL DEL CONSEJERO IA --- */}
 
                   <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
                     <span>📊 Descargar Excel (.csv)</span>
@@ -296,7 +341,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
       </div>
     </main>
   );
