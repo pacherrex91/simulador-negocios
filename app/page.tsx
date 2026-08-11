@@ -28,9 +28,21 @@ export default function Home() {
   const [cargandoIA, setCargandoIA] = useState(false);
   const [activeRol, setActiveRol] = useState("");
 
-  // --- ESTADOS PARA COMPARAR PROYECTOS ---
+  // --- ESTADOS PARA COMPARAR PROYECTOS Y ORDENAMIENTO ---
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'ganancia', direction: 'desc' });
+
+  // --- ESCUCHAR LA TECLA 'ESC' PARA CERRAR EL MODAL ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showCompareModal) {
+        setShowCompareModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCompareModal]);
 
   // --- FUNCIÓN PARA PEDIR CONSEJO A GEMINI ---
   const pedirConsejo = async (rol: string) => {
@@ -59,14 +71,15 @@ export default function Home() {
   const cargarHistorial = async () => {
     const { data } = await supabase.from('simulations').select('*').order('created_at', { ascending: false });
     if (data) {
-      const ranking = data.sort((a, b) => (b.financial_results?.riesgo?.ganancia_promedio_anio || 0) - (a.financial_results?.riesgo?.ganancia_promedio_anio || 0));
-      setHistorial(ranking);
+      setHistorial(data);
     }
   };
 
   const eliminarSimulacion = async (id: string) => {
     if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
     await supabase.from('simulations').delete().eq('id', id);
+    // Remover también de los seleccionados para comparar si estuviera allí
+    setSelectedToCompare(prev => prev.filter(s => s.id !== id));
     cargarHistorial();
   };
 
@@ -76,6 +89,63 @@ export default function Home() {
     } else {
       setSelectedToCompare([...selectedToCompare, item]);
     }
+  };
+
+  // --- LÓGICA DE ORDENAMIENTO DE LA TABLA ---
+  const requestSort = (key: string) => {
+    let direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortedHistorial = () => {
+    const sortedData = [...historial];
+    sortedData.sort((a, b) => {
+      if (!a.financial_results || !b.financial_results) return 0;
+      
+      const resA = a.financial_results;
+      const resB = b.financial_results;
+      
+      let aValue: any = 0;
+      let bValue: any = 0;
+
+      switch(sortConfig.key) {
+        case 'proyecto':
+          aValue = a.project_name;
+          bValue = b.project_name;
+          return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        case 'inversion':
+          aValue = resA.metricas?.inversion_total || 0;
+          bValue = resB.metricas?.inversion_total || 0;
+          break;
+        case 'punto_eq':
+          aValue = Math.ceil((resA.metricas?.gastos_fijos_mes || 0) / ((a.inputs?.precio_venta - a.inputs?.costo_directo) || 1));
+          bValue = Math.ceil((resB.metricas?.gastos_fijos_mes || 0) / ((b.inputs?.precio_venta - b.inputs?.costo_directo) || 1));
+          break;
+        case 'riesgo':
+          aValue = resA.riesgo?.probabilidad_perdida || 0;
+          bValue = resB.riesgo?.probabilidad_perdida || 0;
+          break;
+        case 'ganancia':
+          aValue = resA.riesgo?.ganancia_promedio_anio || 0;
+          bValue = resB.riesgo?.ganancia_promedio_anio || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sortedData;
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: string }) => {
+    if (sortConfig.key !== columnKey) return <span className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>;
+    return <span className="ml-1 text-indigo-500">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>;
   };
 
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
@@ -253,7 +323,6 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* EL GRÁFICO */}
                   <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <h3 className="font-bold text-slate-800 mb-2 text-sm">Flujo de Caja Mensual (Proyección Base)</h3>
                     <div className="h-48 w-full">
@@ -336,21 +405,31 @@ export default function Home() {
             </div>
             
             <div className="overflow-x-auto overflow-y-auto flex-1">
-              <table className="w-full text-left border-collapse relative">
+              <table className="w-full text-left border-collapse relative select-none">
                 <thead className="bg-slate-100 text-slate-600 text-xs md:text-sm uppercase sticky top-0 z-10 shadow-sm">
                   <tr>
                     <th className="p-3 md:p-4 border-b text-center">✓</th>
-                    <th className="p-3 md:p-4 border-b">Proyecto</th>
-                    <th className="p-3 md:p-4 border-b">Inversión</th>
-                    <th className="p-3 md:p-4 border-b">Punto Eq.</th>
-                    <th className="p-3 md:p-4 border-b">Riesgo</th>
-                    <th className="p-3 md:p-4 border-b">Ganancia Año 1</th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('proyecto')}>
+                      Proyecto <SortIcon columnKey="proyecto" />
+                    </th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>
+                      Inversión <SortIcon columnKey="inversion" />
+                    </th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('punto_eq')}>
+                      Punto Eq. <SortIcon columnKey="punto_eq" />
+                    </th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('riesgo')}>
+                      Riesgo <SortIcon columnKey="riesgo" />
+                    </th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('ganancia')}>
+                      Ganancia Año 1 <SortIcon columnKey="ganancia" />
+                    </th>
                     <th className="p-3 md:p-4 border-b text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {historial.length > 0 ? (
-                    historial.map((item, idx) => {
+                    getSortedHistorial().map((item, idx) => {
                       const resBD = item.financial_results;
                       if (!resBD || !resBD.metricas) return null;
                       const ganancia = resBD.riesgo?.ganancia_promedio_anio || 0;
@@ -359,7 +438,7 @@ export default function Home() {
                           <td className="p-3 md:p-4 text-center">
                             <input type="checkbox" className="w-4 h-4 text-indigo-600 cursor-pointer" checked={selectedToCompare.some(s => s.id === item.id)} onChange={() => toggleCompare(item)} />
                           </td>
-                          <td className="p-3 md:p-4 font-bold text-slate-800">{idx === 0 && '🏆 '} {item.project_name}</td>
+                          <td className="p-3 md:p-4 font-bold text-slate-800">{item.project_name}</td>
                           <td className="p-3 md:p-4 text-sm">S/ {resBD.metricas.inversion_total}</td>
                           <td className="p-3 md:p-4 text-sm">{Math.ceil(resBD.metricas.gastos_fijos_mes / ((item.inputs.precio_venta - item.inputs.costo_directo) || 1))} v/mes</td>
                           <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-slate-600'}`}>{resBD.riesgo?.probabilidad_perdida}%</td>
@@ -384,7 +463,10 @@ export default function Home() {
 
         {/* --- MODAL DE COMPARACIÓN --- */}
         {showCompareModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowCompareModal(false); }}
+          >
             <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                 <h2 className="text-2xl font-black text-indigo-900">Comparativa de Proyectos</h2>
@@ -396,12 +478,10 @@ export default function Home() {
                   {selectedToCompare.map(item => {
                     const r = item.financial_results;
                     const ganancia = r.riesgo?.ganancia_promedio_anio || 0;
-                    
-                    // Cálculo de respaldo por si es una simulación vieja que no guardó el margen unitario
                     const margenUnitarioCalculado = (item.inputs?.precio_venta || 0) - (item.inputs?.costo_directo || 0);
 
                     return (
-                      <div key={item.id} className="w-72 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col relative">
+                      <div key={item.id} className="w-72 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col relative hover:shadow-md transition-shadow">
                          <button onClick={() => toggleCompare(item)} className="cursor-pointer absolute top-3 right-3 text-slate-400 hover:text-rose-500">✕</button>
                          <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2 pr-4">{item.project_name}</h3>
                          
