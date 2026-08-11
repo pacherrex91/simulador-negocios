@@ -78,17 +78,42 @@ export default function Home() {
   const eliminarSimulacion = async (id: string) => {
     if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
     await supabase.from('simulations').delete().eq('id', id);
-    // Remover también de los seleccionados para comparar si estuviera allí
     setSelectedToCompare(prev => prev.filter(s => s.id !== id));
     cargarHistorial();
   };
 
+  // --- NUEVAS FUNCIONES DE SELECCIÓN MÚLTIPLE ---
   const toggleCompare = (item: any) => {
     if (selectedToCompare.some(s => s.id === item.id)) {
       setSelectedToCompare(selectedToCompare.filter(s => s.id !== item.id));
     } else {
       setSelectedToCompare([...selectedToCompare, item]);
     }
+  };
+
+  const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedToCompare([...historial]);
+    } else {
+      setSelectedToCompare([]);
+    }
+  };
+
+  const deseleccionarTodos = () => {
+    setSelectedToCompare([]);
+  };
+
+  const eliminarSeleccionados = async () => {
+    if (!window.confirm(`¿Estás seguro de eliminar los ${selectedToCompare.length} proyectos seleccionados permanentemente?`)) return;
+    
+    // Extraemos todos los IDs seleccionados
+    const ids = selectedToCompare.map(item => item.id);
+    
+    // Le pedimos a Supabase que borre todos los que coincidan con esos IDs
+    await supabase.from('simulations').delete().in('id', ids);
+    
+    setSelectedToCompare([]);
+    cargarHistorial();
   };
 
   // --- LÓGICA DE ORDENAMIENTO DE LA TABLA ---
@@ -394,13 +419,21 @@ export default function Home() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
             <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
               <h2 className="text-xl font-bold text-slate-800">Ranking de Mis Ideas</h2>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4">
                 {selectedToCompare.length > 0 && (
-                  <button onClick={() => setShowCompareModal(true)} className="cursor-pointer px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm shadow-md hover:bg-indigo-700 transition-colors">
-                    Comparar ({selectedToCompare.length})
-                  </button>
+                  <>
+                    <button onClick={deseleccionarTodos} className="cursor-pointer px-3 md:px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-bold text-xs md:text-sm shadow-md hover:bg-slate-300 transition-colors">
+                      Deseleccionar
+                    </button>
+                    <button onClick={eliminarSeleccionados} className="cursor-pointer px-3 md:px-4 py-2 bg-rose-600 text-white rounded-lg font-bold text-xs md:text-sm shadow-md hover:bg-rose-700 transition-colors">
+                      Eliminar ({selectedToCompare.length})
+                    </button>
+                    <button onClick={() => setShowCompareModal(true)} className="cursor-pointer px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-xs md:text-sm shadow-md hover:bg-indigo-700 transition-colors">
+                      Comparar ({selectedToCompare.length})
+                    </button>
+                  </>
                 )}
-                <button onClick={cargarHistorial} className="cursor-pointer text-sm font-bold text-indigo-600 hover:underline">↻ Actualizar Datos</button>
+                <button onClick={cargarHistorial} className="cursor-pointer text-sm font-bold text-indigo-600 hover:underline">↻ Actualizar</button>
               </div>
             </div>
             
@@ -408,7 +441,14 @@ export default function Home() {
               <table className="w-full text-left border-collapse relative select-none">
                 <thead className="bg-slate-100 text-slate-600 text-xs md:text-sm uppercase sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <th className="p-3 md:p-4 border-b text-center">✓</th>
+                    <th className="p-3 md:p-4 border-b text-center">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 text-indigo-600 cursor-pointer" 
+                        onChange={toggleAll} 
+                        checked={historial.length > 0 && selectedToCompare.length === historial.length} 
+                      />
+                    </th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('proyecto')}>
                       Proyecto <SortIcon columnKey="proyecto" />
                     </th>
