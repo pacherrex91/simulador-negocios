@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import ReactMarkdown from 'react-markdown';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('simulador');
@@ -26,7 +27,7 @@ export default function Home() {
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
 
-  // --- FUNCIÓN PARA PEDIR CONSEJO A DEEPSEEK ---
+  // --- FUNCIÓN PARA PEDIR CONSEJO A GEMINI ---
   const pedirConsejo = async (rol: string) => {
     setCargandoIA(true);
     setConsejoIA("El consejero está analizando tus números...");
@@ -247,25 +248,9 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    <h3 className="font-bold text-slate-800 mb-2 text-sm">Flujo de Caja Mensual</h3>
-                    <div className="h-48 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="mes" tick={{fontSize: 10}} />
-                          <YAxis tick={{fontSize: 10}} width={40}/>
-                          <Tooltip formatter={(value) => `S/ ${value}`} />
-                          <ReferenceLine y={0} stroke="red" strokeDasharray="3 3" />
-                          <Line type="monotone" dataKey="caja" stroke="#4f46e5" strokeWidth={3} dot={{r: 3}} activeDot={{r: 6}} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
                   {/* --- PANEL DEL CONSEJERO IA --- */}
                   <div className="mt-6 p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
-                    <h3 className="font-bold text-indigo-900 mb-4 text-lg">🤖 Consejero de Inteligencia Artificial (DeepSeek)</h3>
+                    <h3 className="font-bold text-indigo-900 mb-4 text-lg">🤖 Consejero de Inteligencia Artificial (Gemini)</h3>
                     <p className="text-sm text-indigo-700 mb-4">Elige un rol para recibir asesoría personalizada sobre esta simulación:</p>
                     
                     <div className="flex gap-2 mb-4 flex-wrap">
@@ -275,14 +260,33 @@ export default function Home() {
                     </div>
 
                     {consejoIA && (
-                      <div className="p-4 bg-white rounded-lg border border-indigo-100 shadow-inner whitespace-pre-wrap text-sm text-slate-700">
-                        {cargandoIA ? "Procesando millones de datos..." : consejoIA}
+                      <div className="p-5 bg-white rounded-lg border border-indigo-100 shadow-inner text-sm text-slate-700">
+                        {cargandoIA ? (
+                          <div className="animate-pulse flex space-x-2 items-center">
+                             <div className="h-4 w-4 bg-indigo-400 rounded-full"></div>
+                             <p className="text-indigo-600 font-medium">Procesando el análisis de tu negocio...</p>
+                          </div>
+                        ) : (
+                          <ReactMarkdown
+                            components={{
+                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-indigo-900 mt-6 mb-3 border-b pb-2" {...props} />,
+                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-700 mt-4 mb-2" {...props} />,
+                              p: ({node, ...props}) => <p className="mb-3 leading-relaxed" {...props} />,
+                              strong: ({node, ...props}) => <strong className="font-bold text-slate-900 bg-indigo-50 px-1 rounded" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-2" {...props} />,
+                              li: ({node, ...props}) => <li className="text-slate-700" {...props} />
+                            }}
+                          >
+                            {consejoIA}
+                          </ReactMarkdown>
+                        )}
                       </div>
                     )}
                   </div>
                   {/* --- FIN PANEL DEL CONSEJERO IA --- */}
 
-                  <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+                  <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="mt-6 cursor-pointer w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
                     <span>📊 Descargar Excel (.csv)</span>
                   </button>
                 </>
