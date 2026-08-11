@@ -100,7 +100,7 @@ export default function Home() {
         
         <header className="mb-6 text-center">
           <h1 className="text-4xl font-extrabold text-indigo-700">Centro de Mando de Inversiones</h1>
-          <p className="text-slate-500 mt-2">Simula, compara y elige la mejor idea para tus S/ 5,000</p>
+          <p className="text-slate-500 mt-2">Simula, compara y elige la mejor idea para tus S/ 10,000</p>
         </header>
 
         <div className="flex justify-center mb-8">
@@ -128,7 +128,7 @@ export default function Home() {
                 <section>
                   <div className="flex justify-between items-end border-b pb-2 mb-4">
                     <h2 className="text-xl font-bold text-indigo-600">2. Desglose de Inversión Inicial</h2>
-                    <span className={`font-bold px-3 py-1 rounded ${invTotal > 5000 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>Total: S/ {invTotal} / S/ 5,000</span>
+                    <span className={`font-bold px-3 py-1 rounded ${invTotal > 10000 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>Total: S/ {invTotal} / S/ 10,000</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {Object.keys(formData.inversion).map(key => (
