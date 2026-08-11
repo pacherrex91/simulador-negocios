@@ -30,7 +30,7 @@ export default function Home() {
   const [activeRol, setActiveRol] = useState("");
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: 'ganancia', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' }); // Por defecto ordenamos por fecha más reciente
 
   // --- ESTADOS DEL MÓDULO "WHAT IF" ---
   const [whatIf, setWhatIf] = useState({ variacionPrecio: 0, variacionCostos: 0 });
@@ -84,8 +84,8 @@ export default function Home() {
 
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      const grouped = getGroupedHistorial();
-      setSelectedToCompare([...grouped]);
+      // Ahora selecciona TODO el historial visible, ya que quitamos la agrupación
+      setSelectedToCompare([...historial]);
     } else {
       setSelectedToCompare([]);
     }
@@ -96,7 +96,7 @@ export default function Home() {
   };
 
   const eliminarSeleccionados = async () => {
-    if (!window.confirm(`¿Estás seguro de eliminar los ${selectedToCompare.length} proyectos seleccionados permanentemente?`)) return;
+    if (!window.confirm(`¿Estás seguro de eliminar las ${selectedToCompare.length} simulaciones seleccionadas permanentemente?`)) return;
     const ids = selectedToCompare.map(item => item.id);
     await supabase.from('simulations').delete().in('id', ids);
     setSelectedToCompare([]);
@@ -109,14 +109,9 @@ export default function Home() {
     setSortConfig({ key, direction });
   };
 
-  // AGRUPAR HISTORIAL: Solo mostrar la versión más reciente de cada proyecto
-  const getGroupedHistorial = () => {
-    const map = new Map();
-    historial.forEach(item => {
-      if (!map.has(item.project_name)) map.set(item.project_name, item);
-    });
-    
-    const sortedData = Array.from(map.values());
+  // --- LÓGICA DE ORDENAMIENTO (SIN AGRUPAR) ---
+  const getSortedHistorial = () => {
+    const sortedData = [...historial];
     sortedData.sort((a, b) => {
       if (!a.financial_results || !b.financial_results) return 0;
       const resA = a.financial_results;
@@ -124,8 +119,13 @@ export default function Home() {
       let aValue: any = 0; let bValue: any = 0;
 
       switch(sortConfig.key) {
+        case 'fecha':
+          aValue = new Date(a.created_at || 0).getTime(); bValue = new Date(b.created_at || 0).getTime(); break;
         case 'proyecto':
           aValue = a.project_name; bValue = b.project_name;
+          return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        case 'sector':
+          aValue = a.inputs?.sector || ""; bValue = b.inputs?.sector || "";
           return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
         case 'score':
           aValue = resA.metricas?.score || 0; bValue = resB.metricas?.score || 0; break;
@@ -171,8 +171,6 @@ export default function Home() {
 
   const exportarAExcel = (nombre: string, resultados: any) => {
     if (!resultados || !resultados.base) return;
-    
-    // El formato BOM \uFEFF fuerza a Excel a leer los acentos y símbolos (S/) correctamente
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     
     csvContent += `REPORTE DE DECISIÓN DE INVERSIÓN: ${nombre.toUpperCase()}\n\n`;
@@ -214,13 +212,26 @@ export default function Home() {
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
   const chartData = res?.base?.caja_mes_a_mes?.map((caja: number, i: number) => ({ mes: `Mes ${i + 1}`, caja })) || [];
 
-  // Cálculos en tiempo real para el módulo "What If"
   const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
   const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
   const wiMargen = wiPrecio - wiCosto;
   const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
   const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
   const wiUtilidadAnualEst = wiMargen > 0 ? ((wiMargen * formData.ventas.base) - wiGastos) * 12 : 0;
+
+  // Función para formatear fechas de forma amigable
+  const formatFecha = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    if (diffHours < 24) return `Hace ${diffHours} h`;
+    return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+  };
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
@@ -239,7 +250,6 @@ export default function Home() {
 
         {activeTab === 'simulador' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* PANEL IZQUIERDO: FORMULARIO */}
             <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
@@ -248,6 +258,7 @@ export default function Home() {
                     <div className="md:col-span-2"><label className="block text-sm font-semibold mb-1">Nombre del Proyecto</label><input type="text" value={formData.nombre_idea} onChange={e => handleSimple('nombre_idea', e.target.value)} className="w-full p-2 border rounded bg-slate-50 focus:ring-2 ring-indigo-200 outline-none" /></div>
                     <div><label className="block text-sm font-bold mb-1 text-emerald-700">Mi Capital Total (S/)</label><input type="number" value={formData.capital_disponible} onChange={e => handleSimple('capital_disponible', parseFloat(e.target.value))} className="w-full p-2 border-2 border-emerald-300 rounded bg-emerald-50 font-bold outline-none" /></div>
                   </div>
+                  <div><label className="block text-sm font-semibold mb-1">Sector Comercial</label><input type="text" value={formData.sector} onChange={e => handleSimple('sector', e.target.value)} className="w-full p-2 border rounded bg-slate-50 focus:ring-2 ring-indigo-200 outline-none" /></div>
                 </section>
                 
                 <section>
@@ -295,7 +306,6 @@ export default function Home() {
               </form>
             </div>
 
-            {/* PANEL DERECHO: RESULTADOS */}
             <div className="lg:col-span-5 space-y-6">
               {res ? (
                 <>
@@ -496,23 +506,22 @@ export default function Home() {
                 <thead className="bg-slate-100 text-slate-600 text-xs md:text-sm uppercase sticky top-0 z-10 shadow-sm">
                   <tr>
                     <th className="p-3 md:p-4 border-b text-center">
-                      <input type="checkbox" className="w-4 h-4 text-indigo-600 cursor-pointer" onChange={toggleAll} checked={getGroupedHistorial().length > 0 && selectedToCompare.length === getGroupedHistorial().length} />
+                      <input type="checkbox" className="w-4 h-4 text-indigo-600 cursor-pointer" onChange={toggleAll} checked={historial.length > 0 && selectedToCompare.length === historial.length} />
                     </th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('fecha')}>Fecha/Hora <SortIcon columnKey="fecha" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('proyecto')}>Proyecto <SortIcon columnKey="proyecto" /></th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('sector')}>Sector <SortIcon columnKey="sector" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('score')}>Score <SortIcon columnKey="score" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>Inversión <SortIcon columnKey="inversion" /></th>
-                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('punto_eq')}>Punto Eq. <SortIcon columnKey="punto_eq" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('riesgo')}>Riesgo <SortIcon columnKey="riesgo" /></th>
-                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('ganancia')}>Ganancia Año 1 <SortIcon columnKey="ganancia" /></th>
                     <th className="p-3 md:p-4 border-b text-center">Exportar</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {getGroupedHistorial().length > 0 ? (
-                    getGroupedHistorial().map((item, idx) => {
+                  {getSortedHistorial().length > 0 ? (
+                    getSortedHistorial().map((item, idx) => {
                       const resBD = item.financial_results;
                       if (!resBD || !resBD.metricas) return null;
-                      const ganancia = resBD.riesgo?.ganancia_promedio_anio || 0;
                       const score = resBD.metricas.score || 0;
                       
                       return (
@@ -520,19 +529,16 @@ export default function Home() {
                           <td className="p-3 md:p-4 text-center">
                             <input type="checkbox" className="w-4 h-4 text-indigo-600 cursor-pointer" checked={selectedToCompare.some(s => s.id === item.id)} onChange={() => toggleCompare(item)} />
                           </td>
-                          <td className="p-3 md:p-4 font-bold text-slate-800">
-                             {idx === 0 && <span className="text-amber-500 mr-1">🏆</span>}
-                             {item.project_name}
-                          </td>
+                          <td className="p-3 md:p-4 text-xs font-medium text-slate-500 whitespace-nowrap">{formatFecha(item.created_at)}</td>
+                          <td className="p-3 md:p-4 font-bold text-slate-800">{item.project_name}</td>
+                          <td className="p-3 md:p-4 text-sm text-slate-600">{item.inputs?.sector || "N/A"}</td>
                           <td className="p-3 md:p-4">
                             <span className={`px-2 py-1 rounded text-xs font-bold ${score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 45 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
                               {score}/100
                             </span>
                           </td>
                           <td className="p-3 md:p-4 text-sm font-medium">S/ {resBD.metricas.inversion_total}</td>
-                          <td className="p-3 md:p-4 text-sm font-medium">{resBD.metricas.punto_equilibrio || 0} v/m</td>
                           <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-slate-600'}`}>{resBD.riesgo?.probabilidad_perdida}%</td>
-                          <td className={`p-3 md:p-4 text-sm font-bold ${ganancia >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>S/ {ganancia}</td>
                           <td className="p-3 md:p-4 text-center">
                              <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:underline text-xs bg-emerald-50 px-3 py-1 rounded-md">↓ Excel</button>
                           </td>
@@ -572,7 +578,8 @@ export default function Home() {
                     return (
                       <div key={item.id} className="w-80 bg-white border border-slate-200 rounded-2xl p-6 shadow-md flex flex-col relative hover:shadow-xl transition-shadow">
                          <button onClick={() => toggleCompare(item)} className="cursor-pointer absolute top-4 right-4 text-slate-400 hover:text-rose-500 bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center">✕</button>
-                         <h3 className="font-bold text-xl text-slate-800 mb-2 pr-8 leading-tight">{item.project_name}</h3>
+                         <h3 className="font-bold text-xl text-slate-800 mb-1 pr-8 leading-tight">{item.project_name}</h3>
+                         <p className="text-xs text-slate-500 mb-3">{formatFecha(item.created_at)}</p>
                          
                          <div className={`mb-5 inline-block px-3 py-1 rounded-full text-xs font-bold border ${score >= 75 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : score >= 45 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
                            Score: {score}/100
