@@ -26,9 +26,15 @@ export default function Home() {
   // --- ESTADOS DE LA INTELIGENCIA ARTIFICIAL ---
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
+  const [activeRol, setActiveRol] = useState(""); // Saber qué botón se presionó
+
+  // --- ESTADOS PARA COMPARAR PROYECTOS ---
+  const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
   // --- FUNCIÓN PARA PEDIR CONSEJO A GEMINI ---
   const pedirConsejo = async (rol: string) => {
+    setActiveRol(rol);
     setCargandoIA(true);
     setConsejoIA("El consejero está analizando tus números...");
     try {
@@ -58,11 +64,27 @@ export default function Home() {
     }
   };
 
+  const eliminarSimulacion = async (id: string) => {
+    if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
+    await supabase.from('simulations').delete().eq('id', id);
+    cargarHistorial();
+  };
+
+  const toggleCompare = (item: any) => {
+    if (selectedToCompare.some(s => s.id === item.id)) {
+      setSelectedToCompare(selectedToCompare.filter(s => s.id !== item.id));
+    } else {
+      setSelectedToCompare([...selectedToCompare, item]);
+    }
+  };
+
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setConsejoIA(""); // Limpiar IA al simular de nuevo
+    setActiveRol("");
     try {
       const peticion = await fetch("https://simulador-backend-ytbv.onrender.com/simular", {
         method: "POST",
@@ -141,7 +163,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
             {/* PANEL IZQUIERDO */}
-            <div className="lg:col-span-8 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+            <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
               <form onSubmit={handleSubmit} className="space-y-8">
                 
                 <section>
@@ -191,14 +213,14 @@ export default function Home() {
                   </div>
                 </section>
 
-                <button type="submit" disabled={loading || invTotal > 10000} className="cursor-pointer w-full py-4 bg-indigo-900 hover:bg-indigo-800 text-white text-lg font-bold rounded-xl transition-all disabled:opacity-50">
+                <button type="submit" disabled={loading || invTotal > 10000} className="cursor-pointer w-full py-4 bg-indigo-900 hover:bg-indigo-800 text-white text-lg font-bold rounded-xl transition-all disabled:opacity-50 shadow-lg hover:shadow-xl">
                   {loading ? "Simulando 1,000 escenarios..." : invTotal > 10000 ? "Inversión supera límite" : "Ejecutar Simulación Completa 🚀"}
                 </button>
               </form>
             </div>
 
             {/* PANEL DERECHO */}
-            <div className="lg:col-span-4 space-y-6">
+            <div className="lg:col-span-5 space-y-6">
               {res ? (
                 <>
                   <div className={`p-5 border-2 rounded-xl shadow-sm text-center ${promedioMensual >= 0 ? 'bg-emerald-50 border-emerald-400' : 'bg-rose-50 border-rose-400'}`}>
@@ -209,72 +231,71 @@ export default function Home() {
                     <p className="text-xs font-medium text-slate-500">Promedio calculado sobre el primer año.</p>
                   </div>
 
-                  <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-xl">
-                    <h3 className="font-bold text-indigo-900 text-lg mb-4">Análisis de Riesgo</h3>
-                    <div className="mb-4">
-                      <p className="text-sm text-slate-600">Probabilidad de fracaso (Caja negativa al Año 1):</p>
-                      <p className={`text-4xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                        {res.riesgo.probabilidad_perdida}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-600">Caja Promedio Esperada (Año 1):</p>
-                      <p className={`text-2xl font-bold ${res.riesgo.ganancia_promedio_anio >= 0 ? 'text-indigo-700' : 'text-rose-600'}`}>
-                        S/ {res.riesgo.ganancia_promedio_anio}
-                      </p>
-                    </div>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                       <p className="text-sm text-slate-600 mb-1">Riesgo (Pérdida al Año 1):</p>
+                       <p className={`text-2xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                         {res.riesgo.probabilidad_perdida}%
+                       </p>
+                     </div>
+                     <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                       <p className="text-sm text-slate-600 mb-1">Punto Equilibrio (Ventas):</p>
+                       <p className="text-2xl font-extrabold text-indigo-700">{puntoEquilibrio}</p>
+                     </div>
                   </div>
 
-                  <div className="p-5 bg-slate-800 text-white rounded-xl shadow-md">
-                    <h3 className="font-bold text-lg mb-2">Proyección Base</h3>
-                    <p className="text-slate-300 text-sm mb-4">Mes en el que recuperas toda tu inversión inicial de S/ {res.metricas.inversion_total}:</p>
-                    <p className={`text-2xl font-bold ${typeof res.base.mes_recuperacion === 'number' ? 'text-emerald-400' : 'text-emerald-400'}`}>
-                      {typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : res.base.mes_recuperacion}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                    <h3 className="font-bold text-indigo-900 text-sm mb-1">Meta Mensual (Punto Equilibrio)</h3>
-                    <p className="text-2xl font-extrabold text-indigo-700">{puntoEquilibrio} ventas</p>
-                    <p className="text-xs font-bold text-indigo-900 mt-1">(A partir de la venta {puntoEquilibrio + 1}, recién empiezas a ganar).</p>
-                  </div>
-
-                  <div className={`p-4 rounded-xl border ${res.metricas.cubre_fondo ? 'bg-white border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                    <h3 className="font-bold text-slate-800 text-sm mb-1">Caja de Emergencia (2 meses)</h3>
+                  <div className={`p-4 rounded-xl border ${res.metricas.cubre_fondo ? 'bg-white border-emerald-200 shadow-sm' : 'bg-amber-50 border-amber-200'}`}>
+                    <h3 className="font-bold text-slate-800 text-sm mb-1">Caja de Emergencia (2 meses fijos)</h3>
                     {res.metricas.cubre_fondo ? (
-                      <p className="text-sm text-emerald-700 font-medium">✅ Tienes S/ {10000 - res.metricas.inversion_total} libres, suficiente para cubrir los S/ {res.metricas.fondo_maniobra_req} de gastos fijos si no vendes nada.</p>
+                      <p className="text-sm text-emerald-700 font-medium">✅ S/ {10000 - res.metricas.inversion_total} libres, cubre S/ {res.metricas.fondo_maniobra_req} sin vender.</p>
                     ) : (
-                      <p className="text-sm text-amber-700 font-bold">⚠️ OJO: Te faltan S/ {res.metricas.falta_fondo} de reserva para operar tranquilo los primeros meses.</p>
+                      <p className="text-sm text-amber-700 font-bold">⚠️ OJO: Faltan S/ {res.metricas.falta_fondo} de reserva.</p>
                     )}
                   </div>
 
-                  {/* --- PANEL DEL CONSEJERO IA --- */}
-                  <div className="mt-6 p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
-                    <h3 className="font-bold text-indigo-900 mb-4 text-lg">🤖 Consejero de Inteligencia Artificial (Gemini)</h3>
-                    <p className="text-sm text-indigo-700 mb-4">Elige un rol para recibir asesoría personalizada sobre esta simulación:</p>
+                  {/* EL GRÁFICO RESTAURADO */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-2 text-sm">Flujo de Caja Mensual (Proyección Base)</h3>
+                    <div className="h-48 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="mes" tick={{fontSize: 10}} />
+                          <YAxis tick={{fontSize: 10}} width={40}/>
+                          <Tooltip formatter={(value: any) => `S/ ${value}`} />
+                          <ReferenceLine y={0} stroke="red" strokeDasharray="3 3" />
+                          <Line type="monotone" dataKey="caja" stroke="#4f46e5" strokeWidth={3} dot={{r: 3}} activeDot={{r: 6}} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* --- PANEL DEL CONSEJERO IA MEJORADO --- */}
+                  <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    <h3 className="font-bold text-indigo-900 mb-3 text-lg">🤖 Consejero de IA (Gemini)</h3>
                     
                     <div className="flex gap-2 mb-4 flex-wrap">
-                      <button onClick={() => pedirConsejo('auditor')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700">🧐 Auditor Financiero</button>
-                      <button onClick={() => pedirConsejo('marketing')} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-500">🚀 Director de Marketing</button>
-                      <button onClick={() => pedirConsejo('operaciones')} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-500">⚙️ Asesor Operativo</button>
+                      <button onClick={() => pedirConsejo('auditor')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'auditor' ? 'bg-slate-900 text-white ring-2 ring-offset-2 ring-slate-900' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>🧐 Auditor</button>
+                      <button onClick={() => pedirConsejo('marketing')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'marketing' ? 'bg-purple-800 text-white ring-2 ring-offset-2 ring-purple-800' : 'bg-purple-600 text-white hover:bg-purple-500'}`}>🚀 Marketing</button>
+                      <button onClick={() => pedirConsejo('operaciones')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'operaciones' ? 'bg-blue-800 text-white ring-2 ring-offset-2 ring-blue-800' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>⚙️ Operaciones</button>
                     </div>
 
                     {consejoIA && (
-                      <div className="p-5 bg-white rounded-lg border border-indigo-100 shadow-inner text-sm text-slate-700">
+                      <div className="p-5 bg-white rounded-lg border border-indigo-100 shadow-inner text-sm text-slate-700 max-h-[400px] overflow-y-auto">
                         {cargandoIA ? (
                           <div className="animate-pulse flex space-x-2 items-center">
                              <div className="h-4 w-4 bg-indigo-400 rounded-full"></div>
-                             <p className="text-indigo-600 font-medium">Procesando el análisis de tu negocio...</p>
+                             <p className="text-indigo-600 font-medium">Procesando el análisis...</p>
                           </div>
                         ) : (
                           <ReactMarkdown
                             components={{
-                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-indigo-900 mt-6 mb-3 border-b pb-2" {...props} />,
-                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-700 mt-4 mb-2" {...props} />,
-                              p: ({node, ...props}) => <p className="mb-3 leading-relaxed" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-indigo-900 mt-4 mb-2 border-b pb-1" {...props} />,
+                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-700 mt-3 mb-1" {...props} />,
+                              p: ({node, ...props}) => <p className="mb-2 leading-relaxed" {...props} />,
                               strong: ({node, ...props}) => <strong className="font-bold text-slate-900 bg-indigo-50 px-1 rounded" {...props} />,
-                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2" {...props} />,
-                              ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-2" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-3 space-y-1" {...props} />,
                               li: ({node, ...props}) => <li className="text-slate-700" {...props} />
                             }}
                           >
@@ -284,38 +305,47 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                  {/* --- FIN PANEL DEL CONSEJERO IA --- */}
+                  {/* --- FIN PANEL IA --- */}
 
-                  <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="mt-6 cursor-pointer w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+                  <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
                     <span>📊 Descargar Excel (.csv)</span>
                   </button>
                 </>
               ) : (
                 <div className="h-full min-h-[400px] flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white">
-                  <p className="text-center px-6">Ejecuta una simulación para ver los resultados y gráficas.</p>
+                  <p className="text-center px-6">Ejecuta una simulación para ver los resultados, gráficas y la Inteligencia Artificial.</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* --- PESTAÑA 2: RANKING --- */}
+        {/* --- PESTAÑA 2: RANKING Y COMPARACIÓN --- */}
         {activeTab === 'ranking' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-slate-800">Ranking de Rentabilidad</h2>
-              <button onClick={cargarHistorial} className="cursor-pointer text-sm font-bold text-indigo-600 hover:underline">↻ Actualizar Datos</button>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
+            <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+              <h2 className="text-xl font-bold text-slate-800">Ranking de Mis Ideas</h2>
+              <div className="flex items-center gap-4">
+                {selectedToCompare.length > 0 && (
+                  <button onClick={() => setShowCompareModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm shadow-md hover:bg-indigo-700 transition-colors">
+                    Comparar ({selectedToCompare.length})
+                  </button>
+                )}
+                <button onClick={cargarHistorial} className="cursor-pointer text-sm font-bold text-indigo-600 hover:underline">↻ Actualizar Datos</button>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 text-sm uppercase">
-                    <th className="p-4 border-b">Proyecto</th>
-                    <th className="p-4 border-b">Inversión</th>
-                    <th className="p-4 border-b">Punto Eq.</th>
-                    <th className="p-4 border-b">Riesgo</th>
-                    <th className="p-4 border-b">Ganancia Año 1</th>
-                    <th className="p-4 border-b text-center">Acción</th>
+            
+            <div className="overflow-x-auto overflow-y-auto flex-1">
+              <table className="w-full text-left border-collapse relative">
+                <thead className="bg-slate-100 text-slate-600 text-xs md:text-sm uppercase sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="p-3 md:p-4 border-b text-center">✓</th>
+                    <th className="p-3 md:p-4 border-b">Proyecto</th>
+                    <th className="p-3 md:p-4 border-b">Inversión</th>
+                    <th className="p-3 md:p-4 border-b">Punto Eq.</th>
+                    <th className="p-3 md:p-4 border-b">Riesgo</th>
+                    <th className="p-3 md:p-4 border-b">Ganancia Año 1</th>
+                    <th className="p-3 md:p-4 border-b text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -325,26 +355,83 @@ export default function Home() {
                       if (!resBD || !resBD.metricas) return null;
                       const ganancia = resBD.riesgo?.ganancia_promedio_anio || 0;
                       return (
-                        <tr key={idx} className="hover:bg-slate-50 border-b last:border-0">
-                          <td className="p-4 font-bold text-slate-800">{idx === 0 && '🏆 '} {item.project_name}</td>
-                          <td className="p-4">S/ {resBD.metricas.inversion_total}</td>
-                          <td className="p-4">{Math.ceil(resBD.metricas.gastos_fijos_mes / ((item.inputs.precio_venta - item.inputs.costo_directo) || 1))} v/mes</td>
-                          <td className="p-4 font-bold text-slate-600">{resBD.riesgo?.probabilidad_perdida}%</td>
-                          <td className={`p-4 font-bold ${ganancia >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>S/ {ganancia}</td>
-                          <td className="p-4 text-center">
-                            <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:underline text-sm">↓ Excel</button>
+                        <tr key={item.id || idx} className={`hover:bg-slate-50 border-b last:border-0 ${selectedToCompare.some(s => s.id === item.id) ? 'bg-indigo-50/50' : ''}`}>
+                          <td className="p-3 md:p-4 text-center">
+                            <input type="checkbox" className="w-4 h-4 text-indigo-600 cursor-pointer" checked={selectedToCompare.some(s => s.id === item.id)} onChange={() => toggleCompare(item)} />
+                          </td>
+                          <td className="p-3 md:p-4 font-bold text-slate-800">{idx === 0 && '🏆 '} {item.project_name}</td>
+                          <td className="p-3 md:p-4 text-sm">S/ {resBD.metricas.inversion_total}</td>
+                          <td className="p-3 md:p-4 text-sm">{Math.ceil(resBD.metricas.gastos_fijos_mes / ((item.inputs.precio_venta - item.inputs.costo_directo) || 1))} v/mes</td>
+                          <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-slate-600'}`}>{resBD.riesgo?.probabilidad_perdida}%</td>
+                          <td className={`p-3 md:p-4 text-sm font-bold ${ganancia >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>S/ {ganancia}</td>
+                          <td className="p-3 md:p-4">
+                            <div className="flex flex-col md:flex-row justify-center items-center gap-2">
+                               <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:underline text-xs bg-emerald-50 px-2 py-1 rounded">↓ Excel</button>
+                               <button onClick={() => eliminarSimulacion(item.id)} className="cursor-pointer text-rose-600 font-bold hover:underline text-xs bg-rose-50 px-2 py-1 rounded">Eliminar</button>
+                            </div>
                           </td>
                         </tr>
                       );
                     })
                   ) : (
-                    <tr><td colSpan={6} className="p-8 text-center text-slate-500">Aún no hay simulaciones guardadas.</td></tr>
+                    <tr><td colSpan={7} className="p-8 text-center text-slate-500">Aún no hay simulaciones guardadas.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
+
+        {/* --- MODAL DE COMPARACIÓN --- */}
+        {showCompareModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h2 className="text-2xl font-black text-indigo-900">Comparativa de Proyectos</h2>
+                <button onClick={() => setShowCompareModal(false)} className="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">✕ Cerrar</button>
+              </div>
+              
+              <div className="p-6 overflow-x-auto flex-1">
+                <div className="flex gap-4 min-w-max">
+                  {selectedToCompare.map(item => {
+                    const r = item.financial_results;
+                    const ganancia = r.riesgo?.ganancia_promedio_anio || 0;
+                    return (
+                      <div key={item.id} className="w-72 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col relative">
+                         <button onClick={() => toggleCompare(item)} className="absolute top-3 right-3 text-slate-400 hover:text-rose-500">✕</button>
+                         <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2 pr-4">{item.project_name}</h3>
+                         
+                         <div className="space-y-3 flex-1 text-sm">
+                            <div className="flex justify-between border-b border-slate-100 pb-1">
+                               <span className="text-slate-500">Inversión:</span>
+                               <span className="font-bold text-slate-800">S/ {r.metricas.inversion_total}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-100 pb-1">
+                               <span className="text-slate-500">Punto Eq.:</span>
+                               <span className="font-bold text-indigo-600">{Math.ceil(r.metricas.gastos_fijos_mes / ((item.inputs.precio_venta - item.inputs.costo_directo) || 1))} v/mes</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-100 pb-1">
+                               <span className="text-slate-500">Riesgo (Pérdida):</span>
+                               <span className={`font-bold ${r.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>{r.riesgo.probabilidad_perdida}%</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-100 pb-1">
+                               <span className="text-slate-500">Ganancia Año 1:</span>
+                               <span className={`font-bold ${ganancia >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>S/ {ganancia}</span>
+                            </div>
+                            <div className="flex justify-between pt-2">
+                               <span className="text-slate-500">Margen Unitario:</span>
+                               <span className="font-bold text-slate-800">S/ {r.metricas.margen_unitario}</span>
+                            </div>
+                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </main>
   );
