@@ -26,7 +26,7 @@ export default function Home() {
   // --- ESTADOS DE LA INTELIGENCIA ARTIFICIAL ---
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
-  const [activeRol, setActiveRol] = useState(""); // Saber qué botón se presionó
+  const [activeRol, setActiveRol] = useState("");
 
   // --- ESTADOS PARA COMPARAR PROYECTOS ---
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
@@ -83,7 +83,7 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setConsejoIA(""); // Limpiar IA al simular de nuevo
+    setConsejoIA(""); 
     setActiveRol("");
     try {
       const peticion = await fetch("https://simulador-backend-ytbv.onrender.com/simular", {
@@ -253,7 +253,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* EL GRÁFICO RESTAURADO */}
+                  {/* EL GRÁFICO */}
                   <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <h3 className="font-bold text-slate-800 mb-2 text-sm">Flujo de Caja Mensual (Proyección Base)</h3>
                     <div className="h-48 w-full">
@@ -270,14 +270,14 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* --- PANEL DEL CONSEJERO IA MEJORADO --- */}
+                  {/* --- PANEL DEL CONSEJERO IA --- */}
                   <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-xl">
                     <h3 className="font-bold text-indigo-900 mb-3 text-lg">🤖 Consejero de IA (Gemini)</h3>
                     
                     <div className="flex gap-2 mb-4 flex-wrap">
-                      <button onClick={() => pedirConsejo('auditor')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'auditor' ? 'bg-slate-900 text-white ring-2 ring-offset-2 ring-slate-900' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>🧐 Auditor</button>
-                      <button onClick={() => pedirConsejo('marketing')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'marketing' ? 'bg-purple-800 text-white ring-2 ring-offset-2 ring-purple-800' : 'bg-purple-600 text-white hover:bg-purple-500'}`}>🚀 Marketing</button>
-                      <button onClick={() => pedirConsejo('operaciones')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'operaciones' ? 'bg-blue-800 text-white ring-2 ring-offset-2 ring-blue-800' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>⚙️ Operaciones</button>
+                      <button onClick={() => pedirConsejo('auditor')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'auditor' ? 'bg-slate-900 text-white ring-2 ring-offset-2 ring-slate-900' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>🧐 Auditor</button>
+                      <button onClick={() => pedirConsejo('marketing')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'marketing' ? 'bg-purple-800 text-white ring-2 ring-offset-2 ring-purple-800' : 'bg-purple-600 text-white hover:bg-purple-500'}`}>🚀 Marketing</button>
+                      <button onClick={() => pedirConsejo('operaciones')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeRol === 'operaciones' ? 'bg-blue-800 text-white ring-2 ring-offset-2 ring-blue-800' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>⚙️ Operaciones</button>
                     </div>
 
                     {consejoIA && (
@@ -327,7 +327,7 @@ export default function Home() {
               <h2 className="text-xl font-bold text-slate-800">Ranking de Mis Ideas</h2>
               <div className="flex items-center gap-4">
                 {selectedToCompare.length > 0 && (
-                  <button onClick={() => setShowCompareModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm shadow-md hover:bg-indigo-700 transition-colors">
+                  <button onClick={() => setShowCompareModal(true)} className="cursor-pointer px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm shadow-md hover:bg-indigo-700 transition-colors">
                     Comparar ({selectedToCompare.length})
                   </button>
                 )}
@@ -388,7 +388,7 @@ export default function Home() {
             <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                 <h2 className="text-2xl font-black text-indigo-900">Comparativa de Proyectos</h2>
-                <button onClick={() => setShowCompareModal(false)} className="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">✕ Cerrar</button>
+                <button onClick={() => setShowCompareModal(false)} className="cursor-pointer px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">✕ Cerrar</button>
               </div>
               
               <div className="p-6 overflow-x-auto flex-1">
@@ -396,9 +396,13 @@ export default function Home() {
                   {selectedToCompare.map(item => {
                     const r = item.financial_results;
                     const ganancia = r.riesgo?.ganancia_promedio_anio || 0;
+                    
+                    // Cálculo de respaldo por si es una simulación vieja que no guardó el margen unitario
+                    const margenUnitarioCalculado = (item.inputs?.precio_venta || 0) - (item.inputs?.costo_directo || 0);
+
                     return (
                       <div key={item.id} className="w-72 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col relative">
-                         <button onClick={() => toggleCompare(item)} className="absolute top-3 right-3 text-slate-400 hover:text-rose-500">✕</button>
+                         <button onClick={() => toggleCompare(item)} className="cursor-pointer absolute top-3 right-3 text-slate-400 hover:text-rose-500">✕</button>
                          <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2 pr-4">{item.project_name}</h3>
                          
                          <div className="space-y-3 flex-1 text-sm">
@@ -420,7 +424,7 @@ export default function Home() {
                             </div>
                             <div className="flex justify-between pt-2">
                                <span className="text-slate-500">Margen Unitario:</span>
-                               <span className="font-bold text-slate-800">S/ {r.metricas.margen_unitario}</span>
+                               <span className="font-bold text-slate-800">S/ {r.metricas?.margen_unitario || margenUnitarioCalculado}</span>
                             </div>
                          </div>
                       </div>
