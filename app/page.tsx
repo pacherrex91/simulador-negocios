@@ -164,8 +164,8 @@ export default function Home() {
                   </div>
                 </section>
 
-                <button type="submit" disabled={loading || invTotal > 5000} className="cursor-pointer w-full py-4 bg-indigo-900 hover:bg-indigo-800 text-white text-lg font-bold rounded-xl transition-all disabled:opacity-50">
-                  {loading ? "Simulando 1,000 escenarios..." : invTotal > 5000 ? "Inversión supera límite" : "Ejecutar Simulación Completa 🚀"}
+                <button type="submit" disabled={loading || invTotal > 10000} className="cursor-pointer w-full py-4 bg-indigo-900 hover:bg-indigo-800 text-white text-lg font-bold rounded-xl transition-all disabled:opacity-50">
+                  {loading ? "Simulando 1,000 escenarios..." : invTotal > 10000 ? "Inversión supera límite" : "Ejecutar Simulación Completa 🚀"}
                 </button>
               </form>
             </div>
@@ -215,7 +215,7 @@ export default function Home() {
                   <div className={`p-4 rounded-xl border ${res.metricas.cubre_fondo ? 'bg-white border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                     <h3 className="font-bold text-slate-800 text-sm mb-1">Caja de Emergencia (2 meses)</h3>
                     {res.metricas.cubre_fondo ? (
-                      <p className="text-sm text-emerald-700 font-medium">✅ Tienes S/ {5000 - res.metricas.inversion_total} libres, suficiente para cubrir los S/ {res.metricas.fondo_maniobra_req} de gastos fijos si no vendes nada.</p>
+                      <p className="text-sm text-emerald-700 font-medium">✅ Tienes S/ {10000 - res.metricas.inversion_total} libres, suficiente para cubrir los S/ {res.metricas.fondo_maniobra_req} de gastos fijos si no vendes nada.</p>
                     ) : (
                       <p className="text-sm text-amber-700 font-bold">⚠️ OJO: Te faltan S/ {res.metricas.falta_fondo} de reserva para operar tranquilo los primeros meses.</p>
                     )}
