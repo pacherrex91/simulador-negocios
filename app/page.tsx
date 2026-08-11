@@ -66,6 +66,7 @@ export default function Home() {
     if (data) setHistorial(data);
   };
 
+  // --- FUNCIONES DE SELECCIÓN Y ELIMINACIÓN ---
   const eliminarSimulacion = async (id: string) => {
     if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
     await supabase.from('simulations').delete().eq('id', id);
@@ -83,12 +84,15 @@ export default function Home() {
 
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      // Solo seleccionar la última versión de cada proyecto para comparar
       const grouped = getGroupedHistorial();
       setSelectedToCompare([...grouped]);
     } else {
       setSelectedToCompare([]);
     }
+  };
+
+  const deseleccionarTodos = () => {
+    setSelectedToCompare([]);
   };
 
   const eliminarSeleccionados = async () => {
@@ -345,9 +349,8 @@ export default function Home() {
                        <p className={`text-2xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
                          {res.riesgo.probabilidad_perdida}%
                        </p>
-                       {/* TOOLTIP RIESGO */}
                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
-                          Es la probabilidad matemática de que tu proyecto cierre el **primer año completo** con saldo negativo (pérdida de dinero), basándose en los escenarios pesimista y base.
+                          Probabilidad de que tu proyecto cierre el **primer año completo** con saldo negativo.
                        </div>
                      </div>
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
@@ -357,7 +360,7 @@ export default function Home() {
                        </div>
                        <p className="text-2xl font-extrabold text-indigo-700">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</p>
                        <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
-                          El tiempo estimado que te tomará recuperar el 100% de tu inversión inicial (S/ {invTotal}) operando en el escenario base realista.
+                          Tiempo estimado para recuperar el 100% de tu inversión inicial operando en el escenario base.
                        </div>
                      </div>
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
@@ -371,7 +374,7 @@ export default function Home() {
                        </div>
                        <p className="text-2xl font-extrabold text-slate-800">{res.metricas.margen_seguridad}%</p>
                        <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
-                          Cuánto pueden caer tus ventas esperadas (base) antes de que empieces a perder dinero (llegar al punto de equilibrio). Menos de 15% es muy riesgoso.
+                          Cuánto pueden caer tus ventas esperadas antes de llegar al punto de equilibrio. Menos de 15% es muy riesgoso.
                        </div>
                      </div>
                   </div>
@@ -455,7 +458,6 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                  {/* --- FIN PANEL IA --- */}
 
                   <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
                     <span>📊 Descargar Reporte Final (.csv)</span>
