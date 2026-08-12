@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -447,7 +447,6 @@ export default function Home() {
   };
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
-  
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
@@ -572,21 +571,21 @@ export default function Home() {
 
               <div className="print-chart-container">
                 <h3 className="font-bold text-slate-800 mb-2 text-sm">Flujo de Caja Acumulado (Multiescenario)</h3>
-                <ResponsiveContainer width="100%" height="90%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="mes" tick={{fontSize: 10, fill: '#64748b'}} />
-                    <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={45}/>
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
-                    {typeof res.metricas.mes_alcanza_equilibrio === 'number' && (
-                      <ReferenceLine x={`Mes ${res.metricas.mes_alcanza_equilibrio}`} stroke="#8b5cf6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'ALCANZA EQUILIBRIO', fill: '#8b5cf6', fontSize: 10, fontWeight: 'bold' }} />
-                    )}
-                    <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base" dot={false} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} isAnimationActive={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div style={{ width: '100%', display: 'flex', justifyItems: 'center' }}>
+                    <LineChart width={650} height={280} data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="mes" tick={{fontSize: 10, fill: '#64748b'}} />
+                      <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={45}/>
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
+                      {typeof res.metricas.mes_alcanza_equilibrio === 'number' && (
+                        <ReferenceLine x={`Mes ${res.metricas.mes_alcanza_equilibrio}`} stroke="#8b5cf6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'ALCANZA EQUILIBRIO', fill: '#8b5cf6', fontSize: 10, fontWeight: 'bold' }} />
+                      )}
+                      <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base" dot={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} isAnimationActive={false} />
+                    </LineChart>
+                </div>
               </div>
 
               {consejoIA && (
@@ -615,7 +614,6 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto print:hidden">
         
-        {/* TOPBAR: USUARIO, TEMA, TOUR Y NUBE */}
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
