@@ -447,6 +447,7 @@ export default function Home() {
   };
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
+  
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
@@ -463,12 +464,6 @@ export default function Home() {
     if (diffHours < 24) return `Hace ${diffHours} h`;
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
-
-  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
-  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
-  const wiMargen = wiPrecio - wiCosto;
-  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
-  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8 font-sans text-slate-800 dark:text-slate-200 transition-colors duration-300 print:bg-white print:p-0 print:m-0">
