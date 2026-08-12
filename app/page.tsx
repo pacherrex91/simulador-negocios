@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -60,7 +60,7 @@ export default function Home() {
     try {
       const response = await fetch('https://simulador-backend-ytbv.onrender.com/consejero', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rol, idea: formData.nombre_idea, sector: formData.sector, metricas: res.metricas })
+        body: JSON.stringify({ rol, idea: formData.nombre_idea, sector: formData.sector, metricas: res?.metricas })
       });
       const data = await response.json();
       setConsejoIA(data.consejo);
@@ -78,7 +78,7 @@ export default function Home() {
     try {
       const response = await fetch('https://simulador-backend-ytbv.onrender.com/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: chatHistory, question: chatInput, idea: formData.nombre_idea, sector: formData.sector, metricas: res.metricas })
+        body: JSON.stringify({ history: chatHistory, question: chatInput, idea: formData.nombre_idea, sector: formData.sector, metricas: res?.metricas })
       });
       const data = await response.json();
       setChatHistory(prev => [...prev, { role: "model", content: data.respuesta }]);
@@ -110,9 +110,16 @@ export default function Home() {
     if (selectedToCompare.some(s => s.id === item.id)) setSelectedToCompare(selectedToCompare.filter(s => s.id !== item.id));
     else setSelectedToCompare([...selectedToCompare, item]);
   };
+  
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) setSelectedToCompare([...historial]); else setSelectedToCompare([]);
   };
+
+  // AQUÍ ESTÁ LA FUNCIÓN FALTANTE
+  const deseleccionarTodos = () => {
+    setSelectedToCompare([]);
+  };
+
   const eliminarSeleccionados = async () => {
     if (!window.confirm(`¿Eliminar los ${selectedToCompare.length} proyectos seleccionados permanentemente?`)) return;
     const ids = selectedToCompare.map(item => item.id);
@@ -242,7 +249,8 @@ export default function Home() {
     <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800 print:bg-white print:p-0 print:m-0">
       
       {/* -------------------- ESTILOS EXCLUSIVOS PARA EL REPORTE PDF (IMPRESIÓN) -------------------- */}
-      <style dangerouslySetContent={{__html: `
+      {/* AQUÍ CORREGIDO A: dangerouslySetInnerHTML */}
+      <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4; margin: 15mm; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -404,7 +412,7 @@ export default function Home() {
                     ))}
                   </div>
 
-                  {/* NUEVO MÓDULO DE PRÉSTAMOS */}
+                  {/* MÓDULO DE PRÉSTAMOS */}
                   {invTotal > formData.capital_disponible && (
                     <div className="mt-4 p-4 border border-rose-200 bg-rose-50 rounded-xl">
                        <div className="flex items-center gap-2 mb-3">
@@ -502,7 +510,7 @@ export default function Home() {
                          <span>3. Tu Inversión Total</span>
                          <span>{formData.moneda} {invTotal}</span>
                        </p>
-                       {res.metricas.prestamo.monto > 0 && (
+                       {res.metricas.prestamo?.monto > 0 && (
                          <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                             <p className="text-xs font-bold text-amber-800 mb-1">🏦 Préstamo Bancario Activo</p>
                             <p className="text-xs text-amber-700 flex justify-between"><span>Monto Financiado:</span> <span>{formData.moneda} {res.metricas.prestamo.monto}</span></p>
@@ -738,7 +746,6 @@ export default function Home() {
                           <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.ganancia_promedio_anio >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.inputs?.moneda || "S/"} {resBD.riesgo?.ganancia_promedio_anio}</td>
                           <td className="p-3 md:p-4 text-center">
                              <div className="flex justify-center gap-2">
-                               {/* NUEVO BOTÓN EDITAR */}
                                <button onClick={() => editarSimulacion(item)} className="cursor-pointer text-indigo-600 font-bold hover:bg-indigo-100 text-xs bg-indigo-50 px-2 py-1 rounded-md transition-colors" title="Cargar en el simulador">✏️ Editar</button>
                                <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:bg-emerald-100 text-xs bg-emerald-50 px-2 py-1 rounded-md transition-colors" title="Exportar CSV">📊 CSV</button>
                                <button onClick={() => eliminarSimulacion(item.id)} className="cursor-pointer text-rose-600 hover:bg-rose-100 text-xs bg-rose-50 px-2 py-1 rounded-md transition-colors" title="Eliminar">🗑️</button>
