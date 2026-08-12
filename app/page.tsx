@@ -33,6 +33,9 @@ export default function Home() {
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
 
+  // --- ESTADOS DEL MÓDULO "WHAT IF" ---
+  const [whatIf, setWhatIf] = useState({ variacionPrecio: 0, variacionCostos: 0 });
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && showCompareModal) setShowCompareModal(false);
@@ -64,6 +67,7 @@ export default function Home() {
     if (data) setHistorial(data);
   };
 
+  // --- FUNCIONES DE SELECCIÓN, ORDEN Y ELIMINACIÓN ---
   const eliminarSimulacion = async (id: string) => {
     if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
     await supabase.from('simulations').delete().eq('id', id);
@@ -79,6 +83,10 @@ export default function Home() {
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) setSelectedToCompare([...historial]);
     else setSelectedToCompare([]);
+  };
+
+  const deseleccionarTodos = () => {
+    setSelectedToCompare([]);
   };
 
   const eliminarSeleccionados = async () => {
@@ -127,6 +135,7 @@ export default function Home() {
 
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
 
+  // --- MOTOR DE EJECUCIÓN Y EXPORTACIÓN ---
   const ejecutarSimulacion = async () => {
     setLoading(true);
     try {
@@ -152,6 +161,39 @@ export default function Home() {
     window.print();
   };
 
+  const exportarAExcel = (nombre: string, resultados: any) => {
+    if (!resultados || !resultados.base) return;
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    
+    csvContent += `REPORTE DE DECISIÓN DE INVERSIÓN: ${nombre.toUpperCase()}\n\n`;
+    csvContent += `1. VEREDICTO FINAL\n`;
+    csvContent += `Score de Inversión,${resultados.metricas?.score || 'N/A'} / 100\n`;
+    csvContent += `Recomendación,${resultados.metricas?.recomendacion?.estado || 'N/A'} - ${resultados.metricas?.recomendacion?.msg || ''}\n\n`;
+
+    csvContent += `2. MÉTRICAS CLAVE\n`;
+    csvContent += `Inversión Total,S/ ${resultados.metricas.inversion_total}\n`;
+    csvContent += `Ganancia Año 1 (Promedio),S/ ${resultados.riesgo.ganancia_promedio_anio}\n`;
+    csvContent += `Retorno de Inversión (ROI),${resultados.metricas?.roi || 'N/A'}%\n`;
+    csvContent += `Margen Neto (Base),${resultados.base?.margen_neto || 'N/A'}%\n`;
+    csvContent += `Punto de Equilibrio,${resultados.metricas.punto_equilibrio} ventas/mes\n`;
+    csvContent += `Probabilidad de Pérdida,${resultados.riesgo.probabilidad_perdida}%\n`;
+    csvContent += `Recuperación del Capital (Payback),Mes ${resultados.base.mes_recuperacion}\n\n`;
+
+    csvContent += `3. PROYECCIÓN MENSUAL (ESCENARIO BASE)\n`;
+    csvContent += "Mes,Flujo de Caja Acumulado (S/)\n";
+    resultados.base.caja_mes_a_mes.forEach((monto: number, index: number) => {
+      csvContent += `Mes ${index + 1},${monto}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Analisis_Inversion_${nombre.replace(/ /g, "_")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleNested = (category: string, field: string, value: number) => {
     setFormData(prev => ({ ...prev, [category]: { ...(prev as any)[category], [field]: value || 0 } }));
   };
@@ -161,7 +203,6 @@ export default function Home() {
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
   
-  // Procesar las 3 líneas para el gráfico
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
@@ -186,11 +227,16 @@ export default function Home() {
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
+  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
+  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
+  const wiMargen = wiPrecio - wiCosto;
+  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
+  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
+
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800 print:bg-white print:p-0 print:m-0">
       <div className="max-w-7xl mx-auto print:max-w-full">
         
-        {/* ENCABEZADOS Y NAVEGACIÓN (SE OCULTAN AL IMPRIMIR) */}
         <header className="mb-6 text-center print:hidden">
           <h1 className="text-4xl font-extrabold text-indigo-700 tracking-tight">Decisiones de Inversión IA</h1>
           <p className="text-slate-500 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
@@ -211,7 +257,6 @@ export default function Home() {
         {activeTab === 'simulador' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:block print:w-full">
             
-            {/* PANEL IZQUIERDO: FORMULARIO (SE OCULTA AL IMPRIMIR EL REPORTE) */}
             <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 print:hidden">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
@@ -279,11 +324,9 @@ export default function Home() {
               </form>
             </div>
 
-            {/* PANEL DERECHO: RESULTADOS Y REPORTE (ESTE SÍ SE IMPRIME) */}
             <div className="lg:col-span-5 space-y-6 print:col-span-12 print:block print:w-full">
               {res ? (
                 <>
-                  {/* DICTAMEN PRINCIPAL */}
                   <div className={`p-6 border-2 rounded-2xl shadow-md text-center print:shadow-none print:border-4 ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 border-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 border-rose-400' : 'bg-amber-50 border-amber-400'}`}>
                     <h3 className="font-extrabold text-slate-800 text-lg uppercase tracking-wide mb-2">Dictamen de Inversión</h3>
                     <div className="text-3xl font-black mb-1">{res.metricas.recomendacion.estado}</div>
@@ -300,7 +343,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* INDICADORES FINANCIEROS */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4">
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
@@ -340,7 +382,6 @@ export default function Home() {
                      </div>
                   </div>
 
-                  {/* EL GRÁFICO CON 3 LÍNEAS */}
                   <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm print:shadow-none print:border-none">
                     <h3 className="font-bold text-slate-800 mb-2 text-sm">Proyección Multi-Escenario (Caja Acumulada)</h3>
                     <div className="h-56 w-full">
@@ -360,7 +401,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* MÓDULO QUÉ PASA SI (SINCRONIZADO REAL) - SE OCULTA AL IMPRIMIR */}
                   <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md print:hidden">
                     <h3 className="font-bold text-indigo-100 mb-4 text-sm flex items-center gap-2">
                        <span>🧪 Sensibilidad Dinámica: Ajusta y recalcula al instante</span>
@@ -395,7 +435,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* --- PANEL DEL CONSEJERO IA --- */}
                   <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden print:bg-white print:text-slate-800 print:shadow-none print:border print:border-slate-200 print:mt-8">
                     <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl print:hidden">🤖</div>
                     <h3 className="font-bold text-white mb-3 text-lg relative z-10 print:text-indigo-800 border-b print:border-slate-300 print:pb-2">Auditoría Estratégica AI</h3>
@@ -433,7 +472,6 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* BOTONES DE EXPORTACIÓN (SE OCULTAN AL IMPRIMIR) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
                     <button onClick={exportarPDF} className="cursor-pointer w-full py-4 bg-rose-600 hover:bg-rose-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
                       📄 Exportar PDF (Reporte Ejecutivo)
@@ -484,6 +522,7 @@ export default function Home() {
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('score')}>Score <SortIcon columnKey="score" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>Inversión <SortIcon columnKey="inversion" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('riesgo')}>Riesgo <SortIcon columnKey="riesgo" /></th>
+                    <th className="p-3 md:p-4 border-b text-center">Exportar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -508,11 +547,14 @@ export default function Home() {
                           </td>
                           <td className="p-3 md:p-4 text-sm font-medium">S/ {resBD.metricas.inversion_total}</td>
                           <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-slate-600'}`}>{resBD.riesgo?.probabilidad_perdida}%</td>
+                          <td className="p-3 md:p-4 text-center">
+                             <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:underline text-xs bg-emerald-50 px-3 py-1 rounded-md">↓ Excel</button>
+                          </td>
                         </tr>
                       );
                     })
                   ) : (
-                    <tr><td colSpan={7} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados en tu portafolio.</td></tr>
+                    <tr><td colSpan={8} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados en tu portafolio.</td></tr>
                   )}
                 </tbody>
               </table>
