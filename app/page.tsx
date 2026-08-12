@@ -302,6 +302,7 @@ export default function Home() {
   };
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
+  
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
@@ -319,15 +320,10 @@ export default function Home() {
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
-  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
-  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
-  const wiMargen = wiPrecio - wiCosto;
-  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
-  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
-
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8 font-sans text-slate-800 dark:text-slate-200 transition-colors duration-300 print:bg-white print:p-0 print:m-0">
       
+      {/* -------------------- ESTILOS EXCLUSIVOS PARA EL REPORTE PDF (IMPRESIÓN) -------------------- */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4; margin: 15mm; }
@@ -349,6 +345,7 @@ export default function Home() {
         }
       `}} />
 
+      {/* OVERLAY DEL TOUR INTERACTIVO */}
       {tourStep > 0 && (
          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center print:hidden">
             <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-indigo-200 dark:border-indigo-900 text-center animate-in fade-in zoom-in">
@@ -371,6 +368,7 @@ export default function Home() {
          </div>
       )}
 
+      {/* DISEÑO DEL REPORTE PDF (Solo visible al imprimir) */}
       <div className="hidden print:block">
          <div className="print-header">
             <div>
@@ -475,6 +473,7 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto print:hidden">
         
+        {/* TOPBAR: USUARIO, TEMA, TOUR Y NUBE */}
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
@@ -501,6 +500,7 @@ export default function Home() {
           <p className="text-slate-500 dark:text-slate-400 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
+        {/* PLANTILLAS RÁPIDAS */}
         <div className="flex justify-center gap-2 mb-6 flex-wrap">
            <span className="py-2 text-sm font-bold text-slate-400 dark:text-slate-500">Plantillas Rápidas:</span>
            <button onClick={() => cargarPlantilla('cafeteria')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">☕ Cafetería</button>
@@ -518,6 +518,7 @@ export default function Home() {
 
         {activeTab === 'simulador' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* FORMULARIO IZQUIERDO */}
             <div className="lg:col-span-7 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
@@ -608,9 +609,10 @@ export default function Home() {
               </form>
             </div>
 
+            {/* PANEL DERECHO */}
             <div className="lg:col-span-5 space-y-6">
               {res ? (
-                <div className="results-wrapper space-y-6">
+                <>
                   {/* SECCIÓN MARCA BLANCA Y EXPORTACIÓN */}
                   <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm flex flex-col gap-3">
                      <div>
@@ -821,7 +823,7 @@ export default function Home() {
                        </form>
                     )}
                   </div>
-                </div>
+                </>
               ) : (
                 <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white dark:bg-slate-800 p-8">
                   <div className="text-6xl mb-4 opacity-50">📈</div>
