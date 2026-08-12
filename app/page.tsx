@@ -60,7 +60,7 @@ export default function Home() {
   const [guardandoNube, setGuardandoNube] = useState(false);
   
   // --- ESTADOS: TOUR INTERACTIVO (ONBOARDING) ---
-  const [tourStep, setTourStep] = useState(0); // 0 = apagado
+  const [tourStep, setTourStep] = useState(0); 
   
   // --- ESTADOS DE LA IA ---
   const [consejoIA, setConsejoIA] = useState("");
@@ -76,7 +76,6 @@ export default function Home() {
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
 
-  // 1. Efecto: Cargar datos locales al iniciar
   useEffect(() => {
     const savedData = localStorage.getItem('simuladorDraft');
     const savedTheme = localStorage.getItem('theme');
@@ -84,7 +83,6 @@ export default function Home() {
     if (savedTheme === 'dark') setDarkMode(true);
   }, []);
 
-  // 2. Efecto: Autoguardado en Nube (Supabase) mediante Debounce (3 segundos)
   useEffect(() => {
     localStorage.setItem('simuladorDraft', JSON.stringify(formData));
     
@@ -92,7 +90,6 @@ export default function Home() {
       if (formData.nombre_idea.trim() !== "") {
          setGuardandoNube(true);
          try {
-           // Guarda un borrador silencioso en la BD
            await supabase.from('simulations').upsert([{ 
              project_name: formData.nombre_idea + " (Borrador)", 
              inputs: formData, 
@@ -105,7 +102,6 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [formData]);
 
-  // 3. Efecto: Alternar Modo Oscuro en el HTML
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -168,7 +164,6 @@ export default function Home() {
 
   const cargarHistorial = async () => {
     const { data } = await supabase.from('simulations').select('*').order('created_at', { ascending: false });
-    // Filtrar los borradores automáticos para que no ensucien el ranking, solo mostrar 'completed'
     if (data) setHistorial(data.filter(item => item.status !== 'draft'));
   };
 
@@ -257,7 +252,6 @@ export default function Home() {
       });
       const data = await peticion.json();
       setRes(data);
-      // Guardado final real
       await supabase.from('simulations').insert([{ project_name: formData.nombre_idea, inputs: formData, financial_results: data, status: 'completed' }]);
     } catch (error) {
       alert("Error conectando al motor Python. Revisa tu conexión o el servidor.");
@@ -269,7 +263,7 @@ export default function Home() {
     e.preventDefault();
     setConsejoIA(""); setActiveRol(""); setChatHistory([]); setCacheIA({}); 
     ejecutarSimulacion();
-    if(tourStep === 1) setTourStep(2); // Avanzar tour
+    if(tourStep === 1) setTourStep(2); 
   };
 
   const exportarPDF = () => { window.print(); };
@@ -325,10 +319,15 @@ export default function Home() {
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
+  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
+  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
+  const wiMargen = wiPrecio - wiCosto;
+  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
+  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8 font-sans text-slate-800 dark:text-slate-200 transition-colors duration-300 print:bg-white print:p-0 print:m-0">
       
-      {/* ESTILOS PARA PDF */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4; margin: 15mm; }
@@ -350,7 +349,6 @@ export default function Home() {
         }
       `}} />
 
-      {/* OVERLAY DEL TOUR INTERACTIVO */}
       {tourStep > 0 && (
          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center print:hidden">
             <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-indigo-200 dark:border-indigo-900 text-center animate-in fade-in zoom-in">
@@ -373,7 +371,6 @@ export default function Home() {
          </div>
       )}
 
-      {/* DISEÑO DEL REPORTE PDF (Solo visible al imprimir) */}
       <div className="hidden print:block">
          <div className="print-header">
             <div>
@@ -391,7 +388,7 @@ export default function Home() {
          </div>
 
          {res && (
-            <>
+            <div className="print-results-wrapper">
               <div className="print-veredicto">
                  <h3>Dictamen del Algoritmo Financiero</h3>
                  <h2>{res.metricas.recomendacion.estado}</h2>
@@ -472,14 +469,12 @@ export default function Home() {
               <div className="print-footer">
                  Documento generado automáticamente por Decisiones de Inversión IA. Los resultados son estimaciones basadas en los datos proporcionados y no constituyen asesoría financiera garantizada.
               </div>
-            </>
+            </div>
          )}
       </div>
 
-      {/* ENCABEZADO Y CABECERA DE USUARIO */}
       <div className="max-w-7xl mx-auto print:hidden">
         
-        {/* TOPBAR: USUARIO, TEMA, TOUR Y NUBE */}
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
@@ -492,10 +487,10 @@ export default function Home() {
            </div>
            
            <div className="flex items-center gap-3 mt-4 md:mt-0">
-              <button onClick={() => setTourStep(1)} className="text-sm font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+              <button onClick={() => setTourStep(1)} className="cursor-pointer text-sm font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
                 💡 Ayuda / Tour
               </button>
-              <button onClick={() => setDarkMode(!darkMode)} className="text-xl p-2 bg-slate-100 dark:bg-slate-700 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title={darkMode ? 'Modo Claro' : 'Modo Oscuro'}>
+              <button onClick={() => setDarkMode(!darkMode)} className="cursor-pointer text-xl p-2 bg-slate-100 dark:bg-slate-700 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title={darkMode ? 'Modo Claro' : 'Modo Oscuro'}>
                 {darkMode ? '☀️' : '🌙'}
               </button>
            </div>
@@ -506,13 +501,12 @@ export default function Home() {
           <p className="text-slate-500 dark:text-slate-400 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
-        {/* PLANTILLAS RÁPIDAS */}
         <div className="flex justify-center gap-2 mb-6 flex-wrap">
            <span className="py-2 text-sm font-bold text-slate-400 dark:text-slate-500">Plantillas Rápidas:</span>
-           <button onClick={() => cargarPlantilla('cafeteria')} className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">☕ Cafetería</button>
-           <button onClick={() => cargarPlantilla('ecommerce')} className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">🛍️ E-Commerce</button>
-           <button onClick={() => cargarPlantilla('agencia')} className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">💻 Agencia Digital</button>
-           <button onClick={() => cargarPlantilla('vacio')} className="px-3 py-1 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">🗑️ Limpiar Todo</button>
+           <button onClick={() => cargarPlantilla('cafeteria')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">☕ Cafetería</button>
+           <button onClick={() => cargarPlantilla('ecommerce')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">🛍️ E-Commerce</button>
+           <button onClick={() => cargarPlantilla('agencia')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">💻 Agencia Digital</button>
+           <button onClick={() => cargarPlantilla('vacio')} className="cursor-pointer px-3 py-1 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">🗑️ Limpiar Todo</button>
         </div>
 
         <div className="flex justify-center mb-8">
@@ -524,7 +518,6 @@ export default function Home() {
 
         {activeTab === 'simulador' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* FORMULARIO IZQUIERDO */}
             <div className="lg:col-span-7 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
@@ -555,7 +548,6 @@ export default function Home() {
                     ))}
                   </div>
 
-                  {/* MÓDULO DE PRÉSTAMOS */}
                   {invTotal > formData.capital_disponible && (
                     <div className="mt-4 p-4 border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10 rounded-xl">
                        <div className="flex items-center gap-2 mb-3">
@@ -616,10 +608,9 @@ export default function Home() {
               </form>
             </div>
 
-            {/* PANEL DERECHO */}
             <div className="lg:col-span-5 space-y-6">
               {res ? (
-                <>
+                <div className="results-wrapper space-y-6">
                   {/* SECCIÓN MARCA BLANCA Y EXPORTACIÓN */}
                   <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm flex flex-col gap-3">
                      <div>
@@ -830,7 +821,13 @@ export default function Home() {
                        </form>
                     )}
                   </div>
-                </>
+                </div>
+              ) : (
+                <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white dark:bg-slate-800 p-8">
+                  <div className="text-6xl mb-4 opacity-50">📈</div>
+                  <h3 className="text-xl font-bold text-slate-600 dark:text-slate-300 mb-2">Plataforma de Decisión</h3>
+                  <p className="text-center text-sm">Ejecuta la simulación para obtener el Score, análisis de riesgo y el chatbot financiero.</p>
+                </div>
               )}
             </div>
           </div>
@@ -843,11 +840,11 @@ export default function Home() {
               <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">Ranking de Mis Proyectos</h2>
               <div className="flex flex-wrap items-center gap-2 md:gap-4">
                 {selectedToCompare.length > 0 && (
-                  <>
+                  <div className="flex gap-2 md:gap-4">
                     <button onClick={deseleccionarTodos} className="cursor-pointer px-3 md:px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold text-xs md:text-sm shadow-md hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">Deseleccionar</button>
                     <button onClick={eliminarSeleccionados} className="cursor-pointer px-3 md:px-4 py-2 bg-rose-600 text-white rounded-lg font-bold text-xs md:text-sm shadow-md hover:bg-rose-700 transition-colors">Eliminar ({selectedToCompare.length})</button>
                     <button onClick={() => setShowCompareModal(true)} className="cursor-pointer px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-xs md:text-sm shadow-md hover:bg-indigo-700 transition-colors">Comparar ({selectedToCompare.length})</button>
-                  </>
+                  </div>
                 )}
                 <button onClick={cargarHistorial} className="cursor-pointer text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline">↻ Actualizar</button>
               </div>
