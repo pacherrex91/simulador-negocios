@@ -34,10 +34,11 @@ export default function Home() {
     localStorage.setItem('simuladorDraft', JSON.stringify(formData));
   }, [formData]);
 
-  // --- ESTADOS DE LA IA Y CHAT ---
+  // --- ESTADOS DE LA IA, CHAT Y MEMORIA CACHÉ ---
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
   const [activeRol, setActiveRol] = useState("");
+  const [cacheIA, setCacheIA] = useState<any>({}); // Memoria para no recargar la IA
   const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [cargandoChat, setCargandoChat] = useState(false);
@@ -56,7 +57,16 @@ export default function Home() {
   }, [showCompareModal]);
 
   const pedirConsejo = async (rol: string) => {
-    setActiveRol(rol); setCargandoIA(true); setConsejoIA("El consejero está analizando tus métricas avanzadas...");
+    setActiveRol(rol); 
+    
+    // Si ya consultamos a la IA sobre este rol en la simulación actual, cargamos desde la memoria al instante
+    if (cacheIA[rol]) {
+      setConsejoIA(cacheIA[rol]);
+      return;
+    }
+
+    setCargandoIA(true); 
+    setConsejoIA("La IA está procesando el dictamen...");
     try {
       const response = await fetch('https://simulador-backend-ytbv.onrender.com/consejero', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -64,6 +74,10 @@ export default function Home() {
       });
       const data = await response.json();
       setConsejoIA(data.consejo);
+      
+      // Guardamos la respuesta en la memoria para no volver a consultarla
+      setCacheIA((prev: any) => ({ ...prev, [rol]: data.consejo }));
+
     } catch (error) { setConsejoIA("Hubo un error al contactar al consejero."); }
     setCargandoIA(false);
   };
@@ -115,7 +129,6 @@ export default function Home() {
     if (e.target.checked) setSelectedToCompare([...historial]); else setSelectedToCompare([]);
   };
 
-  // AQUÍ ESTÁ LA FUNCIÓN FALTANTE
   const deseleccionarTodos = () => {
     setSelectedToCompare([]);
   };
@@ -182,7 +195,10 @@ export default function Home() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setConsejoIA(""); setActiveRol(""); setChatHistory([]);
+    setConsejoIA(""); 
+    setActiveRol(""); 
+    setChatHistory([]);
+    setCacheIA({}); // Limpiamos la memoria de la IA porque es una simulación nueva
     ejecutarSimulacion();
   };
 
@@ -249,7 +265,6 @@ export default function Home() {
     <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800 print:bg-white print:p-0 print:m-0">
       
       {/* -------------------- ESTILOS EXCLUSIVOS PARA EL REPORTE PDF (IMPRESIÓN) -------------------- */}
-      {/* AQUÍ CORREGIDO A: dangerouslySetInnerHTML */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4; margin: 15mm; }
@@ -719,6 +734,7 @@ export default function Home() {
                     </th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('fecha')}>Fecha <SortIcon columnKey="fecha" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('proyecto')}>Proyecto <SortIcon columnKey="proyecto" /></th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('sector')}>Sector <SortIcon columnKey="sector" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('score')}>Score <SortIcon columnKey="score" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>Inversión <SortIcon columnKey="inversion" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('ganancia')}>Ganancia <SortIcon columnKey="ganancia" /></th>
@@ -739,6 +755,7 @@ export default function Home() {
                           </td>
                           <td className="p-3 md:p-4 text-xs font-medium text-slate-500 whitespace-nowrap">{formatFecha(item.created_at)}</td>
                           <td className="p-3 md:p-4 font-bold text-slate-800">{item.project_name}</td>
+                          <td className="p-3 md:p-4 text-sm text-slate-600">{item.inputs?.sector || "N/A"}</td>
                           <td className="p-3 md:p-4">
                             <span className={`px-2 py-1 rounded text-xs font-bold ${score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 45 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{score}/100</span>
                           </td>
@@ -755,7 +772,7 @@ export default function Home() {
                       );
                     })
                   ) : (
-                    <tr><td colSpan={7} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados.</td></tr>
+                    <tr><td colSpan={8} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados.</td></tr>
                   )}
                 </tbody>
               </table>
