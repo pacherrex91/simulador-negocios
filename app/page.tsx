@@ -17,14 +17,14 @@ export default function Home() {
     gastos_fijos: { marketing: 200, logistica: 150, sueldo_emprendedor: 1000, otros: 100 },
     ventas: { pesimista: 60, base: 120, optimista: 200, crecimiento_mensual: 5 },
     regimen_tributario: "NRUS", inflacion_anual: 3.0,
-    solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+    financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12
   };
 
   const [formData, setFormData] = useState(initialForm);
   const [res, setRes] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   
-  // --- AUTOGUARDADO (LOCALSTORAGE) ---
   useEffect(() => {
     const savedData = localStorage.getItem('simuladorDraft');
     if (savedData) setFormData(JSON.parse(savedData));
@@ -34,39 +34,36 @@ export default function Home() {
     localStorage.setItem('simuladorDraft', JSON.stringify(formData));
   }, [formData]);
 
-  // --- ESTADOS DE LA IA, CHAT Y MEMORIA CACHÉ ---
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
   const [activeRol, setActiveRol] = useState("");
-  const [cacheIA, setCacheIA] = useState<any>({}); // Memoria para no recargar la IA
+  const [cacheIA, setCacheIA] = useState<any>({}); 
   const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [cargandoChat, setCargandoChat] = useState(false);
 
-  // --- ESTADOS DE COMPARACIÓN ---
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
-
-  // --- ESTADOS DEL MÓDULO "WHAT IF" ---
-  const [whatIf, setWhatIf] = useState({ variacionPrecio: 0, variacionCostos: 0 });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && showCompareModal) setShowCompareModal(false); };
     window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showCompareModal]);
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => setLogoPreview(event.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const pedirConsejo = async (rol: string) => {
     setActiveRol(rol); 
-    
-    // Si ya consultamos a la IA sobre este rol en la simulación actual, cargamos desde la memoria al instante
-    if (cacheIA[rol]) {
-      setConsejoIA(cacheIA[rol]);
-      return;
-    }
-
-    setCargandoIA(true); 
-    setConsejoIA("La IA está procesando el dictamen...");
+    if (cacheIA[rol]) { setConsejoIA(cacheIA[rol]); return; }
+    setCargandoIA(true); setConsejoIA("La IA está procesando el dictamen...");
     try {
       const response = await fetch('https://simulador-backend-ytbv.onrender.com/consejero', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -74,10 +71,7 @@ export default function Home() {
       });
       const data = await response.json();
       setConsejoIA(data.consejo);
-      
-      // Guardamos la respuesta en la memoria para no volver a consultarla
       setCacheIA((prev: any) => ({ ...prev, [rol]: data.consejo }));
-
     } catch (error) { setConsejoIA("Hubo un error al contactar al consejero."); }
     setCargandoIA(false);
   };
@@ -129,9 +123,7 @@ export default function Home() {
     if (e.target.checked) setSelectedToCompare([...historial]); else setSelectedToCompare([]);
   };
 
-  const deseleccionarTodos = () => {
-    setSelectedToCompare([]);
-  };
+  const deseleccionarTodos = () => { setSelectedToCompare([]); };
 
   const eliminarSeleccionados = async () => {
     if (!window.confirm(`¿Eliminar los ${selectedToCompare.length} proyectos seleccionados permanentemente?`)) return;
@@ -152,7 +144,6 @@ export default function Home() {
       if (!a.financial_results || !b.financial_results) return 0;
       const resA = a.financial_results; const resB = b.financial_results;
       let aValue: any = 0; let bValue: any = 0;
-
       switch(sortConfig.key) {
         case 'fecha': aValue = new Date(a.created_at || 0).getTime(); bValue = new Date(b.created_at || 0).getTime(); break;
         case 'proyecto': aValue = a.project_name; bValue = b.project_name; return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
@@ -195,10 +186,7 @@ export default function Home() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setConsejoIA(""); 
-    setActiveRol(""); 
-    setChatHistory([]);
-    setCacheIA({}); // Limpiamos la memoria de la IA porque es una simulación nueva
+    setConsejoIA(""); setActiveRol(""); setChatHistory([]); setCacheIA({}); 
     ejecutarSimulacion();
   };
 
@@ -255,12 +243,6 @@ export default function Home() {
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
-  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
-  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
-  const wiMargen = wiPrecio - wiCosto;
-  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
-  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
-
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800 print:bg-white print:p-0 print:m-0">
       
@@ -290,7 +272,11 @@ export default function Home() {
       <div className="hidden print:block">
          <div className="print-header">
             <div>
-               <div className="print-title">Decisiones de Inversión IA</div>
+               {logoPreview ? (
+                 <img src={logoPreview} alt="Logo" style={{ maxHeight: '60px', marginBottom: '10px' }} />
+               ) : (
+                 <div className="print-title">Decisiones de Inversión IA</div>
+               )}
                <div className="print-subtitle">Reporte Confidencial Generado el {new Date().toLocaleDateString('es-PE')}</div>
             </div>
             <div className="text-right">
@@ -351,6 +337,9 @@ export default function Home() {
                     <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={45}/>
                     <Legend wrapperStyle={{ fontSize: '12px' }} />
                     <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
+                    {typeof res.metricas.mes_alcanza_equilibrio === 'number' && (
+                      <ReferenceLine x={`Mes ${res.metricas.mes_alcanza_equilibrio}`} stroke="#8b5cf6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'ALCANZA EQUILIBRIO', fill: '#8b5cf6', fontSize: 10, fontWeight: 'bold' }} />
+                    )}
                     <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} />
                     <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base" dot={false} />
                     <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} />
@@ -426,22 +415,18 @@ export default function Home() {
                       <div key={key}><label className="block text-sm font-semibold mb-1 capitalize">{key}</label><input type="number" value={(formData.inversion as any)[key]} onChange={e => handleNested('inversion', key, parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                     ))}
                   </div>
+                </section>
 
-                  {/* MÓDULO DE PRÉSTAMOS */}
-                  {invTotal > formData.capital_disponible && (
-                    <div className="mt-4 p-4 border border-rose-200 bg-rose-50 rounded-xl">
-                       <div className="flex items-center gap-2 mb-3">
-                          <input type="checkbox" id="prestamo" checked={formData.solicitar_prestamo} onChange={e => handleSimple('solicitar_prestamo', e.target.checked)} className="w-4 h-4 accent-rose-600 cursor-pointer" />
-                          <label htmlFor="prestamo" className="font-bold text-rose-800 text-sm cursor-pointer">Solicitar Préstamo por el capital faltante ({formData.moneda} {invTotal - formData.capital_disponible})</label>
-                       </div>
-                       {formData.solicitar_prestamo && (
-                         <div className="grid grid-cols-2 gap-4">
-                            <div><label className="block text-xs font-semibold text-rose-700 mb-1">Tasa Efectiva Anual (TEA %)</label><input type="number" step="0.1" value={formData.tea} onChange={e => handleSimple('tea', parseFloat(e.target.value))} className="w-full p-2 border border-rose-200 rounded outline-none text-sm" /></div>
-                            <div><label className="block text-xs font-semibold text-rose-700 mb-1">Plazo (Meses)</label><input type="number" value={formData.plazo_meses} onChange={e => handleSimple('plazo_meses', parseInt(e.target.value))} className="w-full p-2 border border-rose-200 rounded outline-none text-sm" /></div>
-                         </div>
-                       )}
+                <section className="bg-slate-50 p-4 border border-slate-200 rounded-xl">
+                    <h2 className="text-md font-bold mb-3 text-slate-800 flex justify-between items-center">
+                       <span>🏦 Financiamiento Externo (Préstamo)</span>
+                       {invTotal > formData.capital_disponible && <span className="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold">Te faltan {formData.moneda} {invTotal - formData.capital_disponible}</span>}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                       <div><label className="block text-xs font-semibold text-slate-600 mb-1">Monto a Financiar ({formData.moneda})</label><input type="number" value={formData.financiamiento_monto} onChange={e => handleSimple('financiamiento_monto', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-white outline-none text-sm" /></div>
+                       <div><label className="block text-xs font-semibold text-slate-600 mb-1">Tasa Interés Mensual (%)</label><input type="number" step="0.1" value={formData.financiamiento_tasa_mensual} onChange={e => handleSimple('financiamiento_tasa_mensual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-white outline-none text-sm" /></div>
+                       <div><label className="block text-xs font-semibold text-slate-600 mb-1">Plazo (Meses)</label><input type="number" value={formData.financiamiento_plazo} onChange={e => handleSimple('financiamiento_plazo', parseInt(e.target.value))} className="w-full p-2 border rounded bg-white outline-none text-sm" /></div>
                     </div>
-                  )}
                 </section>
 
                 <section>
@@ -489,8 +474,20 @@ export default function Home() {
             </div>
 
             <div className="lg:col-span-5 space-y-6">
-              {res ? (
+              {res && (
                 <>
+                  {/* SECCIÓN MARCA BLANCA Y EXPORTACIÓN */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col gap-3">
+                     <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Marca Blanca (PDF)</label>
+                        <input type="file" accept="image/*" onChange={handleLogoUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                     </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                       <button onClick={exportarPDF} className="cursor-pointer py-3 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors">📄 PDF Ejecutivo</button>
+                       <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors">📊 Datos a CSV</button>
+                     </div>
+                  </div>
+
                   {/* DICTAMEN PRINCIPAL */}
                   <div className={`p-6 border-2 rounded-2xl shadow-md text-center ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 border-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 border-rose-400' : 'bg-amber-50 border-amber-400'}`}>
                     <h3 className="font-extrabold text-slate-800 text-lg uppercase tracking-wide mb-2">Dictamen de Inversión</h3>
@@ -575,7 +572,7 @@ export default function Home() {
                      </div>
                   </div>
 
-                  {/* MÓDULO QUÉ PASA SI SINCRONIZADO */}
+                  {/* MÓDULO QUÉ PASA SI SINCRONIZADO BIDIRECCIONAL */}
                   <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md">
                     <h3 className="font-bold text-indigo-100 mb-4 text-sm flex items-center gap-2">
                        <span>🧪 Sensibilidad Dinámica: Ajusta y recalcula al instante</span>
@@ -610,7 +607,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* EL GRÁFICO 3 LÍNEAS */}
+                  {/* EL GRÁFICO 3 LÍNEAS CON PUNTO DE EQUILIBRIO VISUAL */}
                   <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <h3 className="font-bold text-slate-800 mb-2 text-sm">Proyección Multi-Escenario (Caja Acumulada)</h3>
                     <div className="h-56 w-full">
@@ -622,6 +619,9 @@ export default function Home() {
                           <Tooltip formatter={(value: any) => `${formData.moneda} ${value}`} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
+                          {typeof res.metricas.mes_alcanza_equilibrio === 'number' && (
+                            <ReferenceLine x={`Mes ${res.metricas.mes_alcanza_equilibrio}`} stroke="#8b5cf6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'ALCANZA EQUILIBRIO', fill: '#8b5cf6', fontSize: 10, fontWeight: 'bold' }} />
+                          )}
                           <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} />
                           <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base (Realista)" dot={false} activeDot={{r: 6}} />
                           <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} />
@@ -630,7 +630,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* --- PANEL DEL CONSEJERO IA Y CHAT --- */}
+                  {/* --- PANEL DEL CONSEJERO IA Y CHAT DINÁMICO --- */}
                   <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">🤖</div>
                     <h3 className="font-bold text-white mb-3 text-lg relative z-10">Auditoría Estratégica AI</h3>
@@ -687,22 +687,7 @@ export default function Home() {
                        </form>
                     )}
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button onClick={exportarPDF} className="cursor-pointer w-full py-4 bg-rose-600 hover:bg-rose-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
-                      📄 Exportar PDF (Reporte Ejecutivo)
-                    </button>
-                    <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
-                      📊 Exportar Data a CSV
-                    </button>
-                  </div>
                 </>
-              ) : (
-                <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white p-8">
-                  <div className="text-6xl mb-4 opacity-50">📈</div>
-                  <h3 className="text-xl font-bold text-slate-600 mb-2">Plataforma de Decisión</h3>
-                  <p className="text-center text-sm">Ejecuta la simulación para obtener el Score, análisis de riesgo y el chatbot financiero.</p>
-                </div>
               )}
             </div>
           </div>
@@ -734,7 +719,6 @@ export default function Home() {
                     </th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('fecha')}>Fecha <SortIcon columnKey="fecha" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('proyecto')}>Proyecto <SortIcon columnKey="proyecto" /></th>
-                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('sector')}>Sector <SortIcon columnKey="sector" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('score')}>Score <SortIcon columnKey="score" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>Inversión <SortIcon columnKey="inversion" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('ganancia')}>Ganancia <SortIcon columnKey="ganancia" /></th>
@@ -755,7 +739,6 @@ export default function Home() {
                           </td>
                           <td className="p-3 md:p-4 text-xs font-medium text-slate-500 whitespace-nowrap">{formatFecha(item.created_at)}</td>
                           <td className="p-3 md:p-4 font-bold text-slate-800">{item.project_name}</td>
-                          <td className="p-3 md:p-4 text-sm text-slate-600">{item.inputs?.sector || "N/A"}</td>
                           <td className="p-3 md:p-4">
                             <span className={`px-2 py-1 rounded text-xs font-bold ${score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 45 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{score}/100</span>
                           </td>
@@ -763,6 +746,7 @@ export default function Home() {
                           <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.ganancia_promedio_anio >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.inputs?.moneda || "S/"} {resBD.riesgo?.ganancia_promedio_anio}</td>
                           <td className="p-3 md:p-4 text-center">
                              <div className="flex justify-center gap-2">
+                               {/* BOTÓN EDITAR */}
                                <button onClick={() => editarSimulacion(item)} className="cursor-pointer text-indigo-600 font-bold hover:bg-indigo-100 text-xs bg-indigo-50 px-2 py-1 rounded-md transition-colors" title="Cargar en el simulador">✏️ Editar</button>
                                <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:bg-emerald-100 text-xs bg-emerald-50 px-2 py-1 rounded-md transition-colors" title="Exportar CSV">📊 CSV</button>
                                <button onClick={() => eliminarSimulacion(item.id)} className="cursor-pointer text-rose-600 hover:bg-rose-100 text-xs bg-rose-50 px-2 py-1 rounded-md transition-colors" title="Eliminar">🗑️</button>
@@ -772,41 +756,10 @@ export default function Home() {
                       );
                     })
                   ) : (
-                    <tr><td colSpan={8} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados.</td></tr>
+                    <tr><td colSpan={7} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados.</td></tr>
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* MODAL COMPARATIVA */}
-        {showCompareModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowCompareModal(false); }}>
-            <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-              <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                <h2 className="text-2xl font-black text-indigo-900">Comparativa Decisional</h2>
-                <button onClick={() => setShowCompareModal(false)} className="cursor-pointer px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">✕ Cerrar</button>
-              </div>
-              <div className="p-6 overflow-x-auto flex-1 bg-slate-100/50">
-                <div className="flex gap-6 min-w-max">
-                  {selectedToCompare.map(item => {
-                    const r = item.financial_results;
-                    return (
-                      <div key={item.id} className="w-80 bg-white border border-slate-200 rounded-2xl p-6 shadow-md flex flex-col relative hover:shadow-xl transition-shadow">
-                         <button onClick={() => toggleCompare(item)} className="cursor-pointer absolute top-4 right-4 text-slate-400 hover:text-rose-500 bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center">✕</button>
-                         <h3 className="font-bold text-xl text-slate-800 mb-1 pr-8 leading-tight">{item.project_name}</h3>
-                         <div className="space-y-4 flex-1 text-sm mt-4">
-                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">Inversión:</span><span className="font-black text-slate-800">{item.inputs?.moneda} {r.metricas.inversion_total}</span></div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">ROI:</span><span className="font-black text-indigo-600">{r.metricas?.roi || 0}%</span></div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">Punto Eq.:</span><span className="font-bold text-slate-800">{r.metricas.punto_equilibrio} v/m</span></div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">Riesgo:</span><span className={`font-black ${r.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>{r.riesgo.probabilidad_perdida}%</span></div>
-                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
             </div>
           </div>
         )}
