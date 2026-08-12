@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
 export default function Home() {
@@ -12,13 +12,14 @@ export default function Home() {
   const [formData, setFormData] = useState({
     nombre_idea: "Cocina Oculta / Delivery",
     sector: "Alimentos",
-    descripcion: "Venta de hamburguesas artesanales por delivery los fines de semana.",
     capital_disponible: 10000,
     inversion: { insumos: 500, equipos: 2000, empaques: 300, permisos: 150, otros: 200 },
     precio_venta: 18,
     costo_directo: 11,
-    gastos_fijos: { marketing: 200, logistica: 150, sueldo_emprendedor: 1000, impuestos: 50, otros: 100 },
-    ventas: { pesimista: 60, base: 120, optimista: 200, crecimiento_mensual: 5 }
+    gastos_fijos: { marketing: 200, logistica: 150, sueldo_emprendedor: 1000, otros: 100 },
+    ventas: { pesimista: 60, base: 120, optimista: 200, crecimiento_mensual: 5 },
+    regimen_tributario: "NRUS",
+    inflacion_anual: 3.0
   });
 
   const [res, setRes] = useState<any>(null);
@@ -30,10 +31,7 @@ export default function Home() {
   const [activeRol, setActiveRol] = useState("");
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' }); // Por defecto ordenamos por fecha más reciente
-
-  // --- ESTADOS DEL MÓDULO "WHAT IF" ---
-  const [whatIf, setWhatIf] = useState({ variacionPrecio: 0, variacionCostos: 0 });
+  const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -66,7 +64,6 @@ export default function Home() {
     if (data) setHistorial(data);
   };
 
-  // --- FUNCIONES DE SELECCIÓN Y ELIMINACIÓN ---
   const eliminarSimulacion = async (id: string) => {
     if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
     await supabase.from('simulations').delete().eq('id', id);
@@ -75,24 +72,13 @@ export default function Home() {
   };
 
   const toggleCompare = (item: any) => {
-    if (selectedToCompare.some(s => s.id === item.id)) {
-      setSelectedToCompare(selectedToCompare.filter(s => s.id !== item.id));
-    } else {
-      setSelectedToCompare([...selectedToCompare, item]);
-    }
+    if (selectedToCompare.some(s => s.id === item.id)) setSelectedToCompare(selectedToCompare.filter(s => s.id !== item.id));
+    else setSelectedToCompare([...selectedToCompare, item]);
   };
 
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      // Ahora selecciona TODO el historial visible, ya que quitamos la agrupación
-      setSelectedToCompare([...historial]);
-    } else {
-      setSelectedToCompare([]);
-    }
-  };
-
-  const deseleccionarTodos = () => {
-    setSelectedToCompare([]);
+    if (e.target.checked) setSelectedToCompare([...historial]);
+    else setSelectedToCompare([]);
   };
 
   const eliminarSeleccionados = async () => {
@@ -109,34 +95,22 @@ export default function Home() {
     setSortConfig({ key, direction });
   };
 
-  // --- LÓGICA DE ORDENAMIENTO (SIN AGRUPAR) ---
   const getSortedHistorial = () => {
     const sortedData = [...historial];
     sortedData.sort((a, b) => {
       if (!a.financial_results || !b.financial_results) return 0;
-      const resA = a.financial_results;
-      const resB = b.financial_results;
+      const resA = a.financial_results; const resB = b.financial_results;
       let aValue: any = 0; let bValue: any = 0;
 
       switch(sortConfig.key) {
-        case 'fecha':
-          aValue = new Date(a.created_at || 0).getTime(); bValue = new Date(b.created_at || 0).getTime(); break;
-        case 'proyecto':
-          aValue = a.project_name; bValue = b.project_name;
-          return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-        case 'sector':
-          aValue = a.inputs?.sector || ""; bValue = b.inputs?.sector || "";
-          return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-        case 'score':
-          aValue = resA.metricas?.score || 0; bValue = resB.metricas?.score || 0; break;
-        case 'inversion':
-          aValue = resA.metricas?.inversion_total || 0; bValue = resB.metricas?.inversion_total || 0; break;
-        case 'punto_eq':
-          aValue = resA.metricas?.punto_equilibrio || 0; bValue = resB.metricas?.punto_equilibrio || 0; break;
-        case 'riesgo':
-          aValue = resA.riesgo?.probabilidad_perdida || 0; bValue = resB.riesgo?.probabilidad_perdida || 0; break;
-        case 'ganancia':
-          aValue = resA.riesgo?.ganancia_promedio_anio || 0; bValue = resB.riesgo?.ganancia_promedio_anio || 0; break;
+        case 'fecha': aValue = new Date(a.created_at || 0).getTime(); bValue = new Date(b.created_at || 0).getTime(); break;
+        case 'proyecto': aValue = a.project_name; bValue = b.project_name; return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        case 'sector': aValue = a.inputs?.sector || ""; bValue = b.inputs?.sector || ""; return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        case 'score': aValue = resA.metricas?.score || 0; bValue = resB.metricas?.score || 0; break;
+        case 'inversion': aValue = resA.metricas?.inversion_total || 0; bValue = resB.metricas?.inversion_total || 0; break;
+        case 'punto_eq': aValue = resA.metricas?.punto_equilibrio || 0; bValue = resB.metricas?.punto_equilibrio || 0; break;
+        case 'riesgo': aValue = resA.riesgo?.probabilidad_perdida || 0; bValue = resB.riesgo?.probabilidad_perdida || 0; break;
+        case 'ganancia': aValue = resA.riesgo?.ganancia_promedio_anio || 0; bValue = resB.riesgo?.ganancia_promedio_anio || 0; break;
         default: return 0;
       }
       if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -153,9 +127,8 @@ export default function Home() {
 
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true); setConsejoIA(""); setActiveRol(""); setWhatIf({ variacionPrecio: 0, variacionCostos: 0 });
+  const ejecutarSimulacion = async () => {
+    setLoading(true);
     try {
       const peticion = await fetch("https://simulador-backend-ytbv.onrender.com/simular", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData)
@@ -169,37 +142,14 @@ export default function Home() {
     setLoading(false);
   };
 
-  const exportarAExcel = (nombre: string, resultados: any) => {
-    if (!resultados || !resultados.base) return;
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    
-    csvContent += `REPORTE DE DECISIÓN DE INVERSIÓN: ${nombre.toUpperCase()}\n\n`;
-    csvContent += `1. VEREDICTO FINAL\n`;
-    csvContent += `Score de Inversión,${resultados.metricas?.score || 'N/A'} / 100\n`;
-    csvContent += `Recomendación,${resultados.metricas?.recomendacion?.estado || 'N/A'} - ${resultados.metricas?.recomendacion?.msg || ''}\n\n`;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setConsejoIA(""); setActiveRol("");
+    ejecutarSimulacion();
+  };
 
-    csvContent += `2. MÉTRICAS CLAVE\n`;
-    csvContent += `Inversión Total,S/ ${resultados.metricas.inversion_total}\n`;
-    csvContent += `Ganancia Año 1 (Promedio),S/ ${resultados.riesgo.ganancia_promedio_anio}\n`;
-    csvContent += `Retorno de Inversión (ROI),${resultados.metricas?.roi || 'N/A'}%\n`;
-    csvContent += `Margen Neto (Base),${resultados.base?.margen_neto || 'N/A'}%\n`;
-    csvContent += `Punto de Equilibrio,${resultados.metricas.punto_equilibrio} ventas/mes\n`;
-    csvContent += `Probabilidad de Pérdida,${resultados.riesgo.probabilidad_perdida}%\n`;
-    csvContent += `Recuperación del Capital (Payback),Mes ${resultados.base.mes_recuperacion}\n\n`;
-
-    csvContent += `3. PROYECCIÓN MENSUAL (ESCENARIO BASE)\n`;
-    csvContent += "Mes,Flujo de Caja Acumulado (S/)\n";
-    resultados.base.caja_mes_a_mes.forEach((monto: number, index: number) => {
-      csvContent += `Mes ${index + 1},${monto}\n`;
-    });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Analisis_Inversion_${nombre.replace(/ /g, "_")}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportarPDF = () => {
+    window.print();
   };
 
   const handleNested = (category: string, field: string, value: number) => {
@@ -210,16 +160,20 @@ export default function Home() {
   };
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
-  const chartData = res?.base?.caja_mes_a_mes?.map((caja: number, i: number) => ({ mes: `Mes ${i + 1}`, caja })) || [];
+  
+  // Procesar las 3 líneas para el gráfico
+  const chartData = [];
+  if (res) {
+    for(let i=0; i<12; i++) {
+        chartData.push({
+            mes: `Mes ${i+1}`,
+            base: res.base.caja_mes_a_mes[i],
+            pesimista: res.pesimista.caja_mes_a_mes[i],
+            optimista: res.optimista.caja_mes_a_mes[i]
+        });
+    }
+  }
 
-  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
-  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
-  const wiMargen = wiPrecio - wiCosto;
-  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
-  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
-  const wiUtilidadAnualEst = wiMargen > 0 ? ((wiMargen * formData.ventas.base) - wiGastos) * 12 : 0;
-
-  // Función para formatear fechas de forma amigable
   const formatFecha = (isoString: string) => {
     if (!isoString) return "";
     const date = new Date(isoString);
@@ -227,21 +181,27 @@ export default function Home() {
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
-    
     if (diffMins < 60) return `Hace ${diffMins} min`;
     if (diffHours < 24) return `Hace ${diffHours} h`;
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-6 text-center">
+    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800 print:bg-white print:p-0 print:m-0">
+      <div className="max-w-7xl mx-auto print:max-w-full">
+        
+        {/* ENCABEZADOS Y NAVEGACIÓN (SE OCULTAN AL IMPRIMIR) */}
+        <header className="mb-6 text-center print:hidden">
           <h1 className="text-4xl font-extrabold text-indigo-700 tracking-tight">Decisiones de Inversión IA</h1>
           <p className="text-slate-500 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
-        <div className="flex justify-center mb-8">
+        <div className="hidden print:block text-center mb-8 border-b pb-4">
+           <h1 className="text-3xl font-black text-slate-900 uppercase tracking-widest">Reporte Ejecutivo de Inversión</h1>
+           <p className="text-slate-500 font-bold mt-2">Proyecto: {formData.nombre_idea} | Sector: {formData.sector}</p>
+        </div>
+
+        <div className="flex justify-center mb-8 print:hidden">
           <div className="bg-white rounded-lg shadow-sm p-1 inline-flex border border-slate-200">
             <button onClick={() => setActiveTab('simulador')} className={`cursor-pointer px-6 py-2 font-bold rounded-md transition-colors ${activeTab === 'simulador' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}>Nueva Simulación</button>
             <button onClick={() => setActiveTab('ranking')} className={`cursor-pointer px-6 py-2 font-bold rounded-md transition-colors ${activeTab === 'ranking' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}>Mis Ideas (Ranking)</button>
@@ -249,8 +209,10 @@ export default function Home() {
         </div>
 
         {activeTab === 'simulador' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:block print:w-full">
+            
+            {/* PANEL IZQUIERDO: FORMULARIO (SE OCULTA AL IMPRIMIR EL REPORTE) */}
+            <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 print:hidden">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
                   <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">1. Datos y Capital</h2>
@@ -282,11 +244,22 @@ export default function Home() {
                 </section>
 
                 <section>
-                  <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">4. Gastos Mensuales Fijos (S/)</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">4. Gastos e Impuestos Fijos</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                     {Object.keys(formData.gastos_fijos).map(key => (
                       <div key={key}><label className="block text-sm font-semibold mb-1 capitalize">{key.replace('_', ' ')}</label><input type="number" value={(formData.gastos_fijos as any)[key]} onChange={e => handleNested('gastos_fijos', key, parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                     ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Régimen Tributario</label>
+                      <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="w-full p-2 border rounded bg-slate-50 outline-none text-sm">
+                        <option value="NRUS">Nuevo RUS (Cuota Fija)</option>
+                        <option value="RER">RER (1.5% Ingresos)</option>
+                        <option value="MYPE">Régimen MYPE/General (1% cuenta)</option>
+                      </select>
+                    </div>
+                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Inflación Anual Esperada (%)</label><input type="number" value={formData.inflacion_anual} onChange={e => handleSimple('inflacion_anual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                   </div>
                 </section>
 
@@ -306,11 +279,12 @@ export default function Home() {
               </form>
             </div>
 
-            <div className="lg:col-span-5 space-y-6">
+            {/* PANEL DERECHO: RESULTADOS Y REPORTE (ESTE SÍ SE IMPRIME) */}
+            <div className="lg:col-span-5 space-y-6 print:col-span-12 print:block print:w-full">
               {res ? (
                 <>
                   {/* DICTAMEN PRINCIPAL */}
-                  <div className={`p-6 border-2 rounded-2xl shadow-md text-center ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 border-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 border-rose-400' : 'bg-amber-50 border-amber-400'}`}>
+                  <div className={`p-6 border-2 rounded-2xl shadow-md text-center print:shadow-none print:border-4 ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 border-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 border-rose-400' : 'bg-amber-50 border-amber-400'}`}>
                     <h3 className="font-extrabold text-slate-800 text-lg uppercase tracking-wide mb-2">Dictamen de Inversión</h3>
                     <div className="text-3xl font-black mb-1">{res.metricas.recomendacion.estado}</div>
                     <p className="text-sm font-medium text-slate-700">{res.metricas.recomendacion.msg}</p>
@@ -326,139 +300,127 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* GESTIÓN DEL CAPITAL */}
-                  <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                    <h3 className="font-bold text-slate-800 text-sm mb-3 ml-2">Gestión de tu Capital (S/ {formData.capital_disponible})</h3>
-                    <div className="ml-2 space-y-2">
-                       <p className="text-sm text-slate-600 flex justify-between">
-                         <span>1. Reserva Intocable (3 meses)</span>
-                         <span className="font-bold text-slate-800">S/ {res.metricas.reserva_emergencia}</span>
-                       </p>
-                       <p className="text-sm text-slate-600 flex justify-between">
-                         <span>2. Capital Seguro para Invertir</span>
-                         <span className="font-bold text-emerald-600">S/ {res.metricas.capital_invertible}</span>
-                       </p>
-                       <p className={`text-sm flex justify-between pt-2 border-t mt-2 ${invTotal > res.metricas.capital_invertible ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
-                         <span>3. Tu Inversión Actual</span>
-                         <span>S/ {invTotal}</span>
-                       </p>
-                       {invTotal > res.metricas.capital_invertible && (
-                         <p className="text-xs text-rose-600 mt-1 bg-rose-50 p-2 rounded">⚠️ Estás invirtiendo dinero que debería ser reserva de emergencia. Alto riesgo financiero.</p>
-                       )}
-                    </div>
-                  </div>
-
                   {/* INDICADORES FINANCIEROS */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4">
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
-                         <p className="text-sm font-bold text-slate-600">Riesgo (Pérdida)</p>
-                         <span className="text-xs bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                         <p className="text-xs font-bold text-slate-600">Riesgo (Pérdida)</p>
+                         <span className="text-[10px] bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help print:hidden">?</span>
                        </div>
-                       <p className={`text-2xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                       <p className={`text-xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
                          {res.riesgo.probabilidad_perdida}%
                        </p>
-                       <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
-                          Probabilidad de que tu proyecto cierre el **primer año completo** con saldo negativo.
+                       <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20 print:hidden">
+                          Probabilidad matemática de cerrar el primer año con pérdidas de dinero, calculada evaluando los 3 escenarios juntos.
                        </div>
                      </div>
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
-                         <p className="text-sm font-bold text-slate-600">Payback</p>
-                         <span className="text-xs bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                         <p className="text-xs font-bold text-slate-600">Payback</p>
+                         <span className="text-[10px] bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help print:hidden">?</span>
                        </div>
-                       <p className="text-2xl font-extrabold text-indigo-700">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</p>
-                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
-                          Tiempo estimado para recuperar el 100% de tu inversión inicial operando en el escenario base.
+                       <p className="text-xl font-extrabold text-indigo-700">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</p>
+                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20 print:hidden">
+                          El tiempo exacto que te tomará recuperar el 100% de tu inversión operando en el escenario base realista.
                        </div>
                      </div>
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                       <p className="text-sm font-bold text-slate-600 mb-1">Margen Neto</p>
-                       <p className="text-2xl font-extrabold text-slate-800">{res.base.margen_neto}%</p>
+                       <p className="text-xs font-bold text-slate-600 mb-1">Margen Neto</p>
+                       <p className="text-xl font-extrabold text-slate-800">{res.base.margen_neto}%</p>
                      </div>
                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
-                         <p className="text-sm font-bold text-slate-600">Margen Seguridad</p>
-                         <span className="text-xs bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                         <p className="text-xs font-bold text-slate-600">Margen Seguridad</p>
+                         <span className="text-[10px] bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help print:hidden">?</span>
                        </div>
-                       <p className="text-2xl font-extrabold text-slate-800">{res.metricas.margen_seguridad}%</p>
-                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
-                          Cuánto pueden caer tus ventas esperadas antes de llegar al punto de equilibrio. Menos de 15% es muy riesgoso.
+                       <p className="text-xl font-extrabold text-slate-800">{res.metricas.margen_seguridad}%</p>
+                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20 print:hidden">
+                          Porcentaje máximo que pueden caer tus ventas planeadas antes de que el negocio empiece a perder dinero mensual.
                        </div>
                      </div>
                   </div>
 
-                  {/* MÓDULO QUÉ PASA SI */}
-                  <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md">
-                    <h3 className="font-bold text-indigo-100 mb-4 text-sm flex items-center gap-2">
-                       <span>🧪 Sensibilidad: ¿Qué pasa si...?</span>
-                    </h3>
-                    <div className="space-y-4">
-                       <div>
-                          <div className="flex justify-between text-xs font-medium mb-1">
-                             <span className="text-indigo-200">Si modifico mis precios un</span>
-                             <span className="text-white font-bold">{whatIf.variacionPrecio > 0 ? '+' : ''}{whatIf.variacionPrecio}% (S/ {wiPrecio.toFixed(1)})</span>
-                          </div>
-                          <input type="range" min="-50" max="50" step="5" value={whatIf.variacionPrecio} onChange={(e) => setWhatIf({...whatIf, variacionPrecio: parseInt(e.target.value)})} className="w-full accent-emerald-400 cursor-pointer h-1 bg-indigo-700 rounded-lg appearance-none" />
-                       </div>
-                       <div>
-                          <div className="flex justify-between text-xs font-medium mb-1">
-                             <span className="text-indigo-200">Y mis costos suben/bajan un</span>
-                             <span className="text-white font-bold">{whatIf.variacionCostos > 0 ? '+' : ''}{whatIf.variacionCostos}% (S/ {wiCosto.toFixed(1)})</span>
-                          </div>
-                          <input type="range" min="-50" max="50" step="5" value={whatIf.variacionCostos} onChange={(e) => setWhatIf({...whatIf, variacionCostos: parseInt(e.target.value)})} className="w-full accent-rose-400 cursor-pointer h-1 bg-indigo-700 rounded-lg appearance-none" />
-                       </div>
-                       <div className="pt-3 border-t border-indigo-700 flex justify-between items-center">
-                          <span className="text-xs text-indigo-200">Nuevo Punto Equilibrio:</span>
-                          <span className="font-bold text-lg">{wiPuntoEq} v/mes</span>
-                       </div>
-                    </div>
-                  </div>
-
-                  {/* EL GRÁFICO */}
-                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    <h3 className="font-bold text-slate-800 mb-2 text-sm">Crecimiento de Caja (Escenario Base)</h3>
-                    <div className="h-48 w-full">
+                  {/* EL GRÁFICO CON 3 LÍNEAS */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm print:shadow-none print:border-none">
+                    <h3 className="font-bold text-slate-800 mb-2 text-sm">Proyección Multi-Escenario (Caja Acumulada)</h3>
+                    <div className="h-56 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData}>
+                        <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="mes" tick={{fontSize: 10}} />
-                          <YAxis tick={{fontSize: 10}} width={40}/>
+                          <YAxis tick={{fontSize: 10}} width={45}/>
                           <Tooltip formatter={(value: any) => `S/ ${value}`} />
-                          <ReferenceLine y={0} stroke="red" strokeDasharray="3 3" />
-                          <Line type="monotone" dataKey="caja" stroke="#10b981" strokeWidth={3} dot={{r: 3}} activeDot={{r: 6}} />
+                          <Legend wrapperStyle={{ fontSize: '12px' }} />
+                          <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
+                          <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={{r: 2}} />
+                          <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base (Realista)" dot={{r: 3}} activeDot={{r: 6}} />
+                          <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={{r: 2}} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
+                  {/* MÓDULO QUÉ PASA SI (SINCRONIZADO REAL) - SE OCULTA AL IMPRIMIR */}
+                  <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md print:hidden">
+                    <h3 className="font-bold text-indigo-100 mb-4 text-sm flex items-center gap-2">
+                       <span>🧪 Sensibilidad Dinámica: Ajusta y recalcula al instante</span>
+                    </h3>
+                    <div className="space-y-5">
+                       <div>
+                          <div className="flex justify-between text-xs font-medium mb-2">
+                             <span className="text-indigo-200">Precio de Venta Dinámico</span>
+                             <span className="text-white font-bold bg-indigo-800 px-2 py-1 rounded">S/ {formData.precio_venta.toFixed(2)}</span>
+                          </div>
+                          <input type="range" 
+                             min={Math.max(1, formData.costo_directo + 1)} max={Math.max(100, formData.precio_venta * 2)} step="0.5" 
+                             value={formData.precio_venta} 
+                             onChange={(e) => handleSimple('precio_venta', parseFloat(e.target.value))} 
+                             onMouseUp={ejecutarSimulacion} onTouchEnd={ejecutarSimulacion}
+                             className="w-full accent-emerald-400 cursor-pointer h-1 bg-indigo-700 rounded-lg appearance-none" 
+                          />
+                       </div>
+                       <div>
+                          <div className="flex justify-between text-xs font-medium mb-2">
+                             <span className="text-indigo-200">Costo Directo Dinámico</span>
+                             <span className="text-white font-bold bg-indigo-800 px-2 py-1 rounded">S/ {formData.costo_directo.toFixed(2)}</span>
+                          </div>
+                          <input type="range" 
+                             min="1" max={formData.precio_venta - 0.5} step="0.5" 
+                             value={formData.costo_directo} 
+                             onChange={(e) => handleSimple('costo_directo', parseFloat(e.target.value))} 
+                             onMouseUp={ejecutarSimulacion} onTouchEnd={ejecutarSimulacion}
+                             className="w-full accent-rose-400 cursor-pointer h-1 bg-indigo-700 rounded-lg appearance-none" 
+                          />
+                       </div>
+                    </div>
+                  </div>
+
                   {/* --- PANEL DEL CONSEJERO IA --- */}
-                  <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">🤖</div>
-                    <h3 className="font-bold text-white mb-3 text-lg relative z-10">Auditoría Estratégica (Gemini IA)</h3>
+                  <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden print:bg-white print:text-slate-800 print:shadow-none print:border print:border-slate-200 print:mt-8">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl print:hidden">🤖</div>
+                    <h3 className="font-bold text-white mb-3 text-lg relative z-10 print:text-indigo-800 border-b print:border-slate-300 print:pb-2">Auditoría Estratégica AI</h3>
                     
-                    <div className="flex gap-2 mb-4 flex-wrap relative z-10">
+                    <div className="flex gap-2 mb-4 flex-wrap relative z-10 print:hidden">
                       <button onClick={() => pedirConsejo('auditor')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'auditor' ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>🧐 Riesgo & Costos</button>
                       <button onClick={() => pedirConsejo('marketing')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'marketing' ? 'bg-purple-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>🚀 Crecimiento</button>
                       <button onClick={() => pedirConsejo('operaciones')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'operaciones' ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>⚙️ Operaciones</button>
                     </div>
 
-                    {consejoIA && (
-                      <div className="p-5 bg-slate-900/50 rounded-lg border border-slate-700 shadow-inner text-sm text-slate-300 max-h-[400px] overflow-y-auto relative z-10">
+                    {consejoIA ? (
+                      <div className="p-5 bg-slate-900/50 rounded-lg border border-slate-700 shadow-inner text-sm text-slate-300 max-h-[400px] overflow-y-auto relative z-10 print:bg-transparent print:border-none print:text-slate-800 print:max-h-full print:p-0 print:overflow-visible">
                         {cargandoIA ? (
-                          <div className="animate-pulse flex space-x-3 items-center">
+                          <div className="animate-pulse flex space-x-3 items-center print:hidden">
                              <div className="h-4 w-4 bg-indigo-500 rounded-full"></div>
                              <p className="text-indigo-300 font-medium tracking-wide">La IA está procesando el dictamen...</p>
                           </div>
                         ) : (
                           <ReactMarkdown
                             components={{
-                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-white mt-4 mb-2 border-b border-slate-700 pb-1" {...props} />,
-                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-300 mt-3 mb-1" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-white print:text-slate-800 mt-4 mb-2 border-b border-slate-700 print:border-slate-300 pb-1" {...props} />,
+                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-300 print:text-indigo-700 mt-3 mb-1" {...props} />,
                               p: ({node, ...props}) => <p className="mb-2 leading-relaxed" {...props} />,
-                              strong: ({node, ...props}) => <strong className="font-bold text-white bg-slate-800 px-1 rounded" {...props} />,
-                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-400" {...props} />,
+                              strong: ({node, ...props}) => <strong className="font-bold text-white print:text-black bg-slate-800 print:bg-transparent px-1 rounded" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-400 print:text-slate-700" {...props} />,
                               li: ({node, ...props}) => <li {...props} />
                             }}
                           >
@@ -466,15 +428,23 @@ export default function Home() {
                           </ReactMarkdown>
                         )}
                       </div>
+                    ) : (
+                      <p className="text-sm text-slate-400 print:hidden relative z-10">Selecciona un rol arriba para que la IA emita su reporte escrito aquí. Te recomendamos incluirlo antes de imprimir el PDF.</p>
                     )}
                   </div>
 
-                  <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
-                    <span>📊 Descargar Reporte Final (.csv)</span>
-                  </button>
+                  {/* BOTONES DE EXPORTACIÓN (SE OCULTAN AL IMPRIMIR) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+                    <button onClick={exportarPDF} className="cursor-pointer w-full py-4 bg-rose-600 hover:bg-rose-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
+                      📄 Exportar PDF (Reporte Ejecutivo)
+                    </button>
+                    <button onClick={() => exportarAExcel(formData.nombre_idea, res)} className="cursor-pointer w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
+                      📊 Exportar Data a CSV
+                    </button>
+                  </div>
                 </>
               ) : (
-                <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white p-8">
+                <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white p-8 print:hidden">
                   <div className="text-6xl mb-4 opacity-50">📈</div>
                   <h3 className="text-xl font-bold text-slate-600 mb-2">Plataforma de Decisión</h3>
                   <p className="text-center text-sm">Ejecuta la simulación para obtener el Score de Inversión, el análisis de riesgo y el dictamen de viabilidad.</p>
@@ -486,7 +456,7 @@ export default function Home() {
 
         {/* --- PESTAÑA 2: RANKING Y COMPARACIÓN --- */}
         {activeTab === 'ranking' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh] print:hidden">
             <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
               <h2 className="text-xl font-bold text-slate-800">Ranking de Mis Ideas</h2>
               <div className="flex flex-wrap items-center gap-2 md:gap-4">
@@ -514,7 +484,6 @@ export default function Home() {
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('score')}>Score <SortIcon columnKey="score" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>Inversión <SortIcon columnKey="inversion" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('riesgo')}>Riesgo <SortIcon columnKey="riesgo" /></th>
-                    <th className="p-3 md:p-4 border-b text-center">Exportar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -539,14 +508,11 @@ export default function Home() {
                           </td>
                           <td className="p-3 md:p-4 text-sm font-medium">S/ {resBD.metricas.inversion_total}</td>
                           <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-slate-600'}`}>{resBD.riesgo?.probabilidad_perdida}%</td>
-                          <td className="p-3 md:p-4 text-center">
-                             <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:underline text-xs bg-emerald-50 px-3 py-1 rounded-md">↓ Excel</button>
-                          </td>
                         </tr>
                       );
                     })
                   ) : (
-                    <tr><td colSpan={8} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados en tu portafolio.</td></tr>
+                    <tr><td colSpan={7} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados en tu portafolio.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -557,7 +523,7 @@ export default function Home() {
         {/* --- MODAL DE COMPARACIÓN --- */}
         {showCompareModal && (
           <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm print:hidden"
             onClick={(e) => { if (e.target === e.currentTarget) setShowCompareModal(false); }}
           >
             <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
