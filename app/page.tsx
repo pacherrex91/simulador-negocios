@@ -19,9 +19,9 @@ const TEMPLATES = {
   },
 
   // 🍔 GASTRONOMÍA Y ALIMENTOS (10)
-  cafeteria: { nombre_idea: "Cafetería de Especialidad", sector: "Gastronomía", moneda: "S/", capital_disponible: 25000, inversion: { insumos: 2000, equipos: 15000, empaques: 1000, permisos: 800, otros: 1200 }, precio_venta: 12, costo_directo: 4, gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1500, otros: 2000 }, ventas: { pesimista: 400, base: 800, optimista: 1200, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, ...baseFinanciamiento, solicitar_prestamo: true, financiamiento_monto: 5000, financiamiento_tasa_mensual: 1.5, financiamiento_plazo: 24 },
+  cafeteria: { nombre_idea: "Cafetería de Especialidad", sector: "Gastronomía", moneda: "S/", capital_disponible: 25000, inversion: { insumos: 2000, equipos: 15000, empaques: 1000, permisos: 800, otros: 1200 }, precio_venta: 12, costo_directo: 4, gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1500, otros: 2000 }, ventas: { pesimista: 400, base: 800, optimista: 1200, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, ...baseFinanciamiento, solicitar_prestamo: true, financiamiento_tasa_mensual: 1.5, financiamiento_plazo: 24 },
   dark_kitchen: { nombre_idea: "Dark Kitchen (Delivery)", sector: "Gastronomía", moneda: "S/", capital_disponible: 15000, inversion: { insumos: 1500, equipos: 8000, empaques: 800, permisos: 500, otros: 1000 }, precio_venta: 22, costo_directo: 9, gastos_fijos: { marketing: 800, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, ventas: { pesimista: 300, base: 600, optimista: 900, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, ...baseFinanciamiento },
-  food_truck: { nombre_idea: "Food Truck Ambulante", sector: "Gastronomía", moneda: "S/", capital_disponible: 35000, inversion: { insumos: 1000, equipos: 25000, empaques: 500, permisos: 1500, otros: 2000 }, precio_venta: 18, costo_directo: 7, gastos_fijos: { marketing: 300, logistica: 400, sueldo_emprendedor: 1500, otros: 800 }, ventas: { pesimista: 500, base: 1000, optimista: 1500, crecimiento_mensual: 2 }, regimen_tributario: "RER", inflacion_anual: 3.0, ...baseFinanciamiento, solicitar_prestamo: true, financiamiento_monto: 10000, financiamiento_tasa_mensual: 1.2, financiamiento_plazo: 36 },
+  food_truck: { nombre_idea: "Food Truck Ambulante", sector: "Gastronomía", moneda: "S/", capital_disponible: 35000, inversion: { insumos: 1000, equipos: 25000, empaques: 500, permisos: 1500, otros: 2000 }, precio_venta: 18, costo_directo: 7, gastos_fijos: { marketing: 300, logistica: 400, sueldo_emprendedor: 1500, otros: 800 }, ventas: { pesimista: 500, base: 1000, optimista: 1500, crecimiento_mensual: 2 }, regimen_tributario: "RER", inflacion_anual: 3.0, ...baseFinanciamiento, solicitar_prestamo: true, financiamiento_tasa_mensual: 1.2, financiamiento_plazo: 36 },
   panaderia: { nombre_idea: "Panadería Artesanal", sector: "Gastronomía", moneda: "S/", capital_disponible: 20000, inversion: { insumos: 1200, equipos: 12000, empaques: 400, permisos: 600, otros: 1000 }, precio_venta: 15, costo_directo: 4, gastos_fijos: { marketing: 200, logistica: 100, sueldo_emprendedor: 1200, otros: 1800 }, ventas: { pesimista: 600, base: 1200, optimista: 2000, crecimiento_mensual: 4 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, ...baseFinanciamiento },
   restaurante_menu: { nombre_idea: "Restaurante de Menú Diario", sector: "Gastronomía", moneda: "S/", capital_disponible: 15000, inversion: { insumos: 1500, equipos: 6000, empaques: 200, permisos: 800, otros: 2000 }, precio_venta: 14, costo_directo: 7, gastos_fijos: { marketing: 100, logistica: 0, sueldo_emprendedor: 1200, otros: 2500 }, ventas: { pesimista: 800, base: 1500, optimista: 2200, crecimiento_mensual: 1 }, regimen_tributario: "NRUS", inflacion_anual: 5.0, ...baseFinanciamiento },
   cevicheria: { nombre_idea: "Cevichería / Pescados", sector: "Gastronomía", moneda: "S/", capital_disponible: 30000, inversion: { insumos: 2500, equipos: 12000, empaques: 500, permisos: 1000, otros: 3000 }, precio_venta: 35, costo_directo: 14, gastos_fijos: { marketing: 500, logistica: 100, sueldo_emprendedor: 2000, otros: 3500 }, ventas: { pesimista: 300, base: 700, optimista: 1200, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, ...baseFinanciamiento },
@@ -281,11 +281,20 @@ export default function Home() {
 
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
 
+  const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
+
   const ejecutarSimulacion = async () => {
     setLoading(true);
     try {
+      const payload = {
+        ...formData,
+        financiamiento_monto: formData.solicitar_prestamo && (invTotal > formData.capital_disponible) 
+          ? (invTotal - formData.capital_disponible) 
+          : 0
+      };
+      
       const peticion = await fetch("https://simulador-backend-ytbv.onrender.com/simular", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData)
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
       });
       const data = await peticion.json();
       setRes(data);
@@ -312,7 +321,6 @@ export default function Home() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
@@ -628,8 +636,8 @@ export default function Home() {
                        </div>
                        {formData.solicitar_prestamo && (
                          <div className="grid grid-cols-2 gap-4">
-                            <div><label className="block text-xs font-semibold text-rose-700 dark:text-rose-400 mb-1">Tasa Efectiva Anual (TEA %)</label><input type="number" step="0.1" value={formData.tea} onChange={e => handleSimple('tea', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-800 outline-none text-sm" /></div>
-                            <div><label className="block text-xs font-semibold text-rose-700 dark:text-rose-400 mb-1">Plazo (Meses)</label><input type="number" value={formData.plazo_meses} onChange={e => handleSimple('plazo_meses', parseInt(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-800 outline-none text-sm" /></div>
+                            <div><label className="block text-xs font-semibold text-rose-700 dark:text-rose-400 mb-1">Tasa Efectiva Mensual (%)</label><input type="number" step="0.1" value={formData.financiamiento_tasa_mensual} onChange={e => handleSimple('financiamiento_tasa_mensual', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-800 outline-none text-sm" /></div>
+                            <div><label className="block text-xs font-semibold text-rose-700 dark:text-rose-400 mb-1">Plazo (Meses)</label><input type="number" value={formData.financiamiento_plazo} onChange={e => handleSimple('financiamiento_plazo', parseInt(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-800 outline-none text-sm" /></div>
                          </div>
                        )}
                     </div>
@@ -685,7 +693,7 @@ export default function Home() {
               {res ? (
                 <div className="results-wrapper space-y-6">
                   
-                  {/* SECCIÓN EXPORTAR PDF - ÚNICO BOTÓN */}
+                  {/* SECCIÓN EXPORTAR PDF Y LOGO */}
                   <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm flex flex-col gap-3">
                      <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Marca Blanca (Logo en Reporte)</label>
