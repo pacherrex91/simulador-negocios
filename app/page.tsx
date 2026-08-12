@@ -48,21 +48,17 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('simulador');
   const [historial, setHistorial] = useState<any[]>([]);
   
-  // --- ESTADOS: TEMA Y USUARIO ---
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState({ name: "Invitado Local", isLogged: false });
 
-  // --- ESTADOS: FORMULARIO Y RESULTADOS ---
   const [formData, setFormData] = useState(TEMPLATES.cafeteria);
   const [res, setRes] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [guardandoNube, setGuardandoNube] = useState(false);
   
-  // --- ESTADOS: TOUR INTERACTIVO (ONBOARDING) ---
   const [tourStep, setTourStep] = useState(0); 
   
-  // --- ESTADOS DE LA IA ---
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
   const [activeRol, setActiveRol] = useState("");
@@ -71,7 +67,6 @@ export default function Home() {
   const [chatInput, setChatInput] = useState("");
   const [cargandoChat, setCargandoChat] = useState(false);
 
-  // --- ESTADOS DE COMPARACIÓN ---
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
@@ -112,10 +107,17 @@ export default function Home() {
     }
   }, [darkMode]);
 
+  // Se añade el control de la tecla ESC para el Tour
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && showCompareModal) setShowCompareModal(false); };
-    window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showCompareModal]);
+    const handleKeyDown = (e: KeyboardEvent) => { 
+      if (e.key === 'Escape') {
+        if (showCompareModal) setShowCompareModal(false);
+        if (tourStep > 0) setTourStep(0);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown); 
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCompareModal, tourStep]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -302,7 +304,6 @@ export default function Home() {
   };
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
-  
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
@@ -347,7 +348,7 @@ export default function Home() {
 
       {/* OVERLAY DEL TOUR INTERACTIVO */}
       {tourStep > 0 && (
-         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center print:hidden">
+         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center print:hidden" onClick={(e) => { if (e.target === e.currentTarget) setTourStep(0); }}>
             <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-indigo-200 dark:border-indigo-900 text-center animate-in fade-in zoom-in">
                <div className="text-6xl mb-4">{tourStep === 1 ? '📝' : tourStep === 2 ? '🎛️' : '🤖'}</div>
                <h3 className="text-2xl font-black text-indigo-700 dark:text-indigo-400 mb-2">
@@ -359,8 +360,8 @@ export default function Home() {
                   'Por último, interactúa con la Inteligencia Artificial. Hazle preguntas específicas sobre tu rubro en el chat integrado para obtener estrategias reales.'}
                </p>
                <div className="flex justify-between items-center mt-6">
-                 <button onClick={() => setTourStep(0)} className="text-slate-400 font-bold hover:text-slate-600 dark:hover:text-slate-200">Saltar Tour</button>
-                 <button onClick={() => setTourStep(tourStep === 3 ? 0 : tourStep + 1)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl font-bold transition-colors">
+                 <button onClick={() => setTourStep(0)} className="cursor-pointer text-slate-400 font-bold hover:text-slate-600 dark:hover:text-slate-200 transition-colors">Saltar Tour</button>
+                 <button onClick={() => setTourStep(tourStep === 3 ? 0 : tourStep + 1)} className="cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl font-bold transition-colors">
                    {tourStep === 3 ? '¡Empezar!' : 'Siguiente'}
                  </button>
                </div>
@@ -440,9 +441,9 @@ export default function Home() {
                     {typeof res.metricas.mes_alcanza_equilibrio === 'number' && (
                       <ReferenceLine x={`Mes ${res.metricas.mes_alcanza_equilibrio}`} stroke="#8b5cf6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'ALCANZA EQUILIBRIO', fill: '#8b5cf6', fontSize: 10, fontWeight: 'bold' }} />
                     )}
-                    <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} />
-                    <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base" dot={false} />
-                    <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} />
+                    <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base" dot={false} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -473,7 +474,6 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto print:hidden">
         
-        {/* TOPBAR: USUARIO, TEMA, TOUR Y NUBE */}
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
@@ -500,7 +500,6 @@ export default function Home() {
           <p className="text-slate-500 dark:text-slate-400 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
-        {/* PLANTILLAS RÁPIDAS */}
         <div className="flex justify-center gap-2 mb-6 flex-wrap">
            <span className="py-2 text-sm font-bold text-slate-400 dark:text-slate-500">Plantillas Rápidas:</span>
            <button onClick={() => cargarPlantilla('cafeteria')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">☕ Cafetería</button>
@@ -518,13 +517,12 @@ export default function Home() {
 
         {activeTab === 'simulador' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* FORMULARIO IZQUIERDO */}
             <div className="lg:col-span-7 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
                   <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
                      <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400">1. Datos y Capital</h2>
-                     <select value={formData.moneda} onChange={e => handleSimple('moneda', e.target.value)} className="p-1 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none">
+                     <select value={formData.moneda} onChange={e => handleSimple('moneda', e.target.value)} className="p-1 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
                         <option value="S/">Soles (S/)</option>
                         <option value="USD">Dólares (USD)</option>
                         <option value="EUR">Euros (€)</option>
@@ -583,7 +581,7 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Régimen Tributario</label>
-                      <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none text-sm">
+                      <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none text-sm cursor-pointer">
                         <option value="NRUS">Nuevo RUS (Cuota Fija)</option>
                         <option value="RER">RER (1.5% Ingresos)</option>
                         <option value="MYPE">Régimen General (1% cuenta)</option>
@@ -609,15 +607,14 @@ export default function Home() {
               </form>
             </div>
 
-            {/* PANEL DERECHO */}
             <div className="lg:col-span-5 space-y-6">
               {res ? (
-                <>
+                <div className="results-wrapper space-y-6">
                   {/* SECCIÓN MARCA BLANCA Y EXPORTACIÓN */}
                   <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm flex flex-col gap-3">
                      <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Marca Blanca (PDF)</label>
-                        <input type="file" accept="image/*" onChange={handleLogoUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/30 dark:file:text-indigo-300 hover:file:bg-indigo-100 cursor-pointer" />
+                        <input type="file" accept="image/*" onChange={handleLogoUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/30 dark:file:text-indigo-300 hover:file:bg-indigo-100 cursor-pointer file:cursor-pointer" />
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                        <button onClick={exportarPDF} className="cursor-pointer py-3 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors">📄 PDF Ejecutivo</button>
@@ -759,9 +756,9 @@ export default function Home() {
                           {typeof res.metricas.mes_alcanza_equilibrio === 'number' && (
                             <ReferenceLine x={`Mes ${res.metricas.mes_alcanza_equilibrio}`} stroke="#8b5cf6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'EQUILIBRIO', fill: '#8b5cf6', fontSize: 10, fontWeight: 'bold' }} />
                           )}
-                          <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} />
-                          <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base (Realista)" dot={false} activeDot={{r: 6}} />
-                          <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} />
+                          <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} isAnimationActive={false} />
+                          <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base (Realista)" dot={false} activeDot={{r: 6}} isAnimationActive={false} />
+                          <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} isAnimationActive={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -823,7 +820,7 @@ export default function Home() {
                        </form>
                     )}
                   </div>
-                </>
+                </div>
               ) : (
                 <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white dark:bg-slate-800 p-8">
                   <div className="text-6xl mb-4 opacity-50">📈</div>
