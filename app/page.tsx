@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
-// --- 1. PLANTILLAS PREDEFINIDAS ---
+// --- 1. CATÁLOGO DE 20 PLANTILLAS (SaaS) ---
 const TEMPLATES = {
   vacio: {
     nombre_idea: "", sector: "", moneda: "S/", capital_disponible: 10000,
@@ -15,32 +15,175 @@ const TEMPLATES = {
     regimen_tributario: "NRUS", inflacion_anual: 3.0,
     solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
   },
+
+  // 🍔 GASTRONOMÍA Y ALIMENTOS
   cafeteria: {
     nombre_idea: "Cafetería de Especialidad", sector: "Gastronomía", moneda: "S/", capital_disponible: 25000,
     inversion: { insumos: 2000, equipos: 15000, empaques: 1000, permisos: 800, otros: 1200 },
     precio_venta: 12, costo_directo: 4,
     gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1500, otros: 2000 },
     ventas: { pesimista: 400, base: 800, optimista: 1200, crecimiento_mensual: 3 },
-    regimen_tributario: "MYPE", inflacion_anual: 4.0,
-    solicitar_prestamo: true, tea: 18.0, plazo_meses: 24
+    regimen_tributario: "MYPE", inflacion_anual: 4.0, solicitar_prestamo: true, tea: 18.0, plazo_meses: 24
   },
-  ecommerce: {
-    nombre_idea: "E-commerce Ropa Urbana", sector: "Retail / Moda", moneda: "USD", capital_disponible: 5000,
-    inversion: { insumos: 3000, equipos: 500, empaques: 200, permisos: 100, otros: 500 },
-    precio_venta: 45, costo_directo: 20,
-    gastos_fijos: { marketing: 800, logistica: 400, sueldo_emprendedor: 1000, otros: 200 },
-    ventas: { pesimista: 50, base: 150, optimista: 300, crecimiento_mensual: 10 },
-    regimen_tributario: "RER", inflacion_anual: 2.5,
-    solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  dark_kitchen: {
+    nombre_idea: "Dark Kitchen (Hamburguesas)", sector: "Gastronomía", moneda: "S/", capital_disponible: 15000,
+    inversion: { insumos: 1500, equipos: 8000, empaques: 800, permisos: 500, otros: 1000 },
+    precio_venta: 22, costo_directo: 9,
+    gastos_fijos: { marketing: 800, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, 
+    ventas: { pesimista: 300, base: 600, optimista: 900, crecimiento_mensual: 5 },
+    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
   },
-  agencia: {
-    nombre_idea: "Agencia de Marketing Digital", sector: "Servicios B2B", moneda: "USD", capital_disponible: 3000,
-    inversion: { insumos: 0, equipos: 2000, empaques: 0, permisos: 200, otros: 300 },
-    precio_venta: 800, costo_directo: 50,
-    gastos_fijos: { marketing: 300, logistica: 50, sueldo_emprendedor: 2000, otros: 500 },
-    ventas: { pesimista: 3, base: 8, optimista: 15, crecimiento_mensual: 5 },
-    regimen_tributario: "MYPE", inflacion_anual: 3.0,
-    solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  food_truck: {
+    nombre_idea: "Food Truck Ambulante", sector: "Gastronomía", moneda: "S/", capital_disponible: 35000,
+    inversion: { insumos: 1000, equipos: 25000, empaques: 500, permisos: 1500, otros: 2000 },
+    precio_venta: 18, costo_directo: 7,
+    gastos_fijos: { marketing: 300, logistica: 400, sueldo_emprendedor: 1500, otros: 800 },
+    ventas: { pesimista: 500, base: 1000, optimista: 1500, crecimiento_mensual: 2 },
+    regimen_tributario: "RER", inflacion_anual: 3.0, solicitar_prestamo: true, tea: 20.0, plazo_meses: 36
+  },
+  panaderia: {
+    nombre_idea: "Panadería Artesanal / Masa Madre", sector: "Gastronomía", moneda: "S/", capital_disponible: 20000,
+    inversion: { insumos: 1200, equipos: 12000, empaques: 400, permisos: 600, otros: 1000 },
+    precio_venta: 15, costo_directo: 4,
+    gastos_fijos: { marketing: 200, logistica: 100, sueldo_emprendedor: 1200, otros: 1800 },
+    ventas: { pesimista: 600, base: 1200, optimista: 2000, crecimiento_mensual: 4 },
+    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+
+  // 🛍️ RETAIL Y E-COMMERCE
+  ecommerce_ropa: {
+    nombre_idea: "E-commerce Ropa Urbana", sector: "Retail / Moda", moneda: "S/", capital_disponible: 8000,
+    inversion: { insumos: 5000, equipos: 500, empaques: 300, permisos: 150, otros: 500 },
+    precio_venta: 80, costo_directo: 35,
+    gastos_fijos: { marketing: 1000, logistica: 400, sueldo_emprendedor: 1000, otros: 300 },
+    ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 8 },
+    regimen_tributario: "RER", inflacion_anual: 2.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  importacion_tecnologia: {
+    nombre_idea: "Importación de Smartwatches", sector: "E-commerce / Tech", moneda: "USD", capital_disponible: 3000,
+    inversion: { insumos: 2000, equipos: 200, empaques: 100, permisos: 100, otros: 200 },
+    precio_venta: 45, costo_directo: 18,
+    gastos_fijos: { marketing: 300, logistica: 150, sueldo_emprendedor: 500, otros: 100 },
+    ventas: { pesimista: 30, base: 100, optimista: 200, crecimiento_mensual: 10 },
+    regimen_tributario: "NRUS", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  tienda_mascotas: {
+    nombre_idea: "Pet Shop Online (Accesorios)", sector: "Retail / Mascotas", moneda: "S/", capital_disponible: 5000,
+    inversion: { insumos: 3000, equipos: 300, empaques: 200, permisos: 150, otros: 400 },
+    precio_venta: 40, costo_directo: 15,
+    gastos_fijos: { marketing: 400, logistica: 300, sueldo_emprendedor: 800, otros: 200 },
+    ventas: { pesimista: 80, base: 200, optimista: 350, crecimiento_mensual: 6 },
+    regimen_tributario: "NRUS", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  cosmetica_natural: {
+    nombre_idea: "Línea de Cosmética Natural", sector: "Retail / Salud", moneda: "S/", capital_disponible: 6000,
+    inversion: { insumos: 2500, equipos: 1000, empaques: 800, permisos: 1200, otros: 500 }, 
+    precio_venta: 35, costo_directo: 12,
+    gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1000, otros: 300 },
+    ventas: { pesimista: 100, base: 250, optimista: 400, crecimiento_mensual: 7 },
+    regimen_tributario: "RER", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+
+  // 💻 SERVICIOS B2B Y DIGITALES
+  agencia_marketing: {
+    nombre_idea: "Agencia de Marketing Digital", sector: "Servicios B2B", moneda: "USD", capital_disponible: 2000,
+    inversion: { insumos: 0, equipos: 1500, empaques: 0, permisos: 100, otros: 400 }, 
+    precio_venta: 500, costo_directo: 50, 
+    gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1500, otros: 300 },
+    ventas: { pesimista: 2, base: 5, optimista: 10, crecimiento_mensual: 5 },
+    regimen_tributario: "MYPE", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  desarrollo_web: {
+    nombre_idea: "Estudio de Desarrollo Web", sector: "Tecnología / B2B", moneda: "USD", capital_disponible: 1500,
+    inversion: { insumos: 0, equipos: 1000, empaques: 0, permisos: 50, otros: 200 },
+    precio_venta: 800, costo_directo: 100, 
+    gastos_fijos: { marketing: 150, logistica: 0, sueldo_emprendedor: 1200, otros: 200 },
+    ventas: { pesimista: 1, base: 3, optimista: 6, crecimiento_mensual: 4 },
+    regimen_tributario: "RER", inflacion_anual: 2.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  consultoria_contable: {
+    nombre_idea: "Consultoría Contable para Mypes", sector: "Servicios B2B", moneda: "S/", capital_disponible: 3000,
+    inversion: { insumos: 200, equipos: 1500, empaques: 0, permisos: 300, otros: 200 },
+    precio_venta: 250, costo_directo: 0, 
+    gastos_fijos: { marketing: 300, logistica: 100, sueldo_emprendedor: 1500, otros: 400 }, 
+    ventas: { pesimista: 10, base: 25, optimista: 45, crecimiento_mensual: 3 },
+    regimen_tributario: "MYPE", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  asistente_virtual: {
+    nombre_idea: "Servicio de Asistencia Virtual", sector: "Servicios B2B", moneda: "USD", capital_disponible: 1000,
+    inversion: { insumos: 0, equipos: 800, empaques: 0, permisos: 50, otros: 100 },
+    precio_venta: 300, costo_directo: 0, 
+    gastos_fijos: { marketing: 100, logistica: 0, sueldo_emprendedor: 800, otros: 100 },
+    ventas: { pesimista: 2, base: 5, optimista: 8, crecimiento_mensual: 5 },
+    regimen_tributario: "NRUS", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+
+  // 💅 SALUD, BIENESTAR Y BELLEZA
+  barberia: {
+    nombre_idea: "Barbería / Salón Clásico", sector: "Belleza", moneda: "S/", capital_disponible: 12000,
+    inversion: { insumos: 1000, equipos: 7000, empaques: 0, permisos: 500, otros: 2000 }, 
+    precio_venta: 35, costo_directo: 3, 
+    gastos_fijos: { marketing: 300, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, 
+    ventas: { pesimista: 150, base: 300, optimista: 500, crecimiento_mensual: 2 },
+    regimen_tributario: "NRUS", inflacion_anual: 4.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  estudio_unas: {
+    nombre_idea: "Estudio de Uñas (Nail Bar)", sector: "Belleza", moneda: "S/", capital_disponible: 8000,
+    inversion: { insumos: 2000, equipos: 3000, empaques: 0, permisos: 400, otros: 1000 },
+    precio_venta: 60, costo_directo: 8, 
+    gastos_fijos: { marketing: 250, logistica: 0, sueldo_emprendedor: 1000, otros: 1000 }, 
+    ventas: { pesimista: 80, base: 160, optimista: 250, crecimiento_mensual: 3 },
+    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  gimnasio_boutique: {
+    nombre_idea: "Gimnasio Funcional / CrossFit", sector: "Salud / Deportes", moneda: "S/", capital_disponible: 40000,
+    inversion: { insumos: 0, equipos: 35000, empaques: 0, permisos: 1200, otros: 3000 }, 
+    precio_venta: 180, costo_directo: 0, 
+    gastos_fijos: { marketing: 600, logistica: 0, sueldo_emprendedor: 2000, otros: 4000 }, 
+    ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 4 },
+    regimen_tributario: "MYPE", inflacion_anual: 4.0, solicitar_prestamo: true, tea: 16.0, plazo_meses: 36
+  },
+  consultorio_psicologico: {
+    nombre_idea: "Consultorio Psicológico Online", sector: "Salud Mental", moneda: "S/", capital_disponible: 2000,
+    inversion: { insumos: 0, equipos: 1000, empaques: 0, permisos: 200, otros: 300 },
+    precio_venta: 100, costo_directo: 0, 
+    gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1500, otros: 150 }, 
+    ventas: { pesimista: 20, base: 45, optimista: 80, crecimiento_mensual: 5 },
+    regimen_tributario: "NRUS", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+
+  // 📚 EDUCACIÓN, EVENTOS Y OCIO
+  cursos_online: {
+    nombre_idea: "Academia de Cursos Pregrabados", sector: "Educación", moneda: "USD", capital_disponible: 1500,
+    inversion: { insumos: 0, equipos: 800, empaques: 0, permisos: 0, otros: 300 }, 
+    precio_venta: 40, costo_directo: 2, 
+    gastos_fijos: { marketing: 500, logistica: 0, sueldo_emprendedor: 500, otros: 100 }, 
+    ventas: { pesimista: 10, base: 50, optimista: 150, crecimiento_mensual: 10 },
+    regimen_tributario: "RER", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  organizacion_bodas: {
+    nombre_idea: "Wedding Planner (Organización)", sector: "Eventos", moneda: "S/", capital_disponible: 5000,
+    inversion: { insumos: 500, equipos: 1500, empaques: 0, permisos: 200, otros: 800 }, 
+    precio_venta: 4500, costo_directo: 200, 
+    gastos_fijos: { marketing: 400, logistica: 200, sueldo_emprendedor: 1500, otros: 300 },
+    ventas: { pesimista: 0, base: 2, optimista: 4, crecimiento_mensual: 2 },
+    regimen_tributario: "RER", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  clases_refuerzo: {
+    nombre_idea: "Centro de Refuerzo Escolar", sector: "Educación", moneda: "S/", capital_disponible: 7000,
+    inversion: { insumos: 500, equipos: 3000, empaques: 0, permisos: 400, otros: 1000 }, 
+    precio_venta: 250, costo_directo: 20, 
+    gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1000, otros: 1200 }, 
+    ventas: { pesimista: 15, base: 35, optimista: 60, crecimiento_mensual: 3 },
+    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  },
+  animacion_infantil: {
+    nombre_idea: "Shows y Animación Infantil", sector: "Eventos / Ocio", moneda: "S/", capital_disponible: 4000,
+    inversion: { insumos: 800, equipos: 2000, empaques: 0, permisos: 100, otros: 500 }, 
+    precio_venta: 400, costo_directo: 50, 
+    gastos_fijos: { marketing: 250, logistica: 100, sueldo_emprendedor: 1000, otros: 150 },
+    ventas: { pesimista: 4, base: 10, optimista: 20, crecimiento_mensual: 4 },
+    regimen_tributario: "NRUS", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
   }
 };
 
@@ -107,7 +250,6 @@ export default function Home() {
     }
   }, [darkMode]);
 
-  // Se añade el control de la tecla ESC para el Tour
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => { 
       if (e.key === 'Escape') {
@@ -183,11 +325,12 @@ export default function Home() {
   };
 
   const cargarPlantilla = (key: keyof typeof TEMPLATES) => {
-    if(window.confirm(`¿Cargar la plantilla de ${TEMPLATES[key].nombre_idea || "Proyecto Vacío"}? Se sobrescribirán tus datos actuales.`)) {
-      setFormData(TEMPLATES[key]);
-      setRes(null);
-      setConsejoIA("");
-      setChatHistory([]);
+    if (key === 'vacio') {
+       if(window.confirm("¿Limpiar todo el formulario?")) { setFormData(TEMPLATES.vacio); setRes(null); setConsejoIA(""); setChatHistory([]); }
+    } else {
+       if(window.confirm(`¿Cargar la plantilla de ${TEMPLATES[key].nombre_idea}? Se sobrescribirán tus datos actuales.`)) {
+         setFormData(TEMPLATES[key]); setRes(null); setConsejoIA(""); setChatHistory([]);
+       }
     }
   };
 
@@ -321,10 +464,15 @@ export default function Home() {
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
+  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
+  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
+  const wiMargen = wiPrecio - wiCosto;
+  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
+  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8 font-sans text-slate-800 dark:text-slate-200 transition-colors duration-300 print:bg-white print:p-0 print:m-0">
       
-      {/* -------------------- ESTILOS EXCLUSIVOS PARA EL REPORTE PDF (IMPRESIÓN) -------------------- */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4; margin: 15mm; }
@@ -346,7 +494,6 @@ export default function Home() {
         }
       `}} />
 
-      {/* OVERLAY DEL TOUR INTERACTIVO */}
       {tourStep > 0 && (
          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center print:hidden" onClick={(e) => { if (e.target === e.currentTarget) setTourStep(0); }}>
             <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-indigo-200 dark:border-indigo-900 text-center animate-in fade-in zoom-in">
@@ -369,7 +516,6 @@ export default function Home() {
          </div>
       )}
 
-      {/* DISEÑO DEL REPORTE PDF (Solo visible al imprimir) */}
       <div className="hidden print:block">
          <div className="print-header">
             <div>
@@ -474,6 +620,7 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto print:hidden">
         
+        {/* TOPBAR: USUARIO, TEMA, TOUR Y NUBE */}
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
@@ -500,12 +647,47 @@ export default function Home() {
           <p className="text-slate-500 dark:text-slate-400 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
-        <div className="flex justify-center gap-2 mb-6 flex-wrap">
-           <span className="py-2 text-sm font-bold text-slate-400 dark:text-slate-500">Plantillas Rápidas:</span>
-           <button onClick={() => cargarPlantilla('cafeteria')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">☕ Cafetería</button>
-           <button onClick={() => cargarPlantilla('ecommerce')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">🛍️ E-Commerce</button>
-           <button onClick={() => cargarPlantilla('agencia')} className="cursor-pointer px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">💻 Agencia Digital</button>
-           <button onClick={() => cargarPlantilla('vacio')} className="cursor-pointer px-3 py-1 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">🗑️ Limpiar Todo</button>
+        {/* -------------------- NUEVO MENÚ DESPLEGABLE (20 PLANTILLAS) -------------------- */}
+        <div className="flex justify-center items-center gap-3 mb-8 flex-wrap">
+           <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Catálogo SaaS:</span>
+           <select 
+             onChange={(e) => cargarPlantilla(e.target.value as keyof typeof TEMPLATES)}
+             className="cursor-pointer px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 outline-none hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors shadow-sm"
+             defaultValue="cafeteria"
+           >
+             <option value="vacio">✨ Crear idea desde cero</option>
+             <optgroup label="🍔 Gastronomía y Alimentos">
+               <option value="cafeteria">Cafetería de Especialidad</option>
+               <option value="dark_kitchen">Dark Kitchen (Delivery)</option>
+               <option value="food_truck">Food Truck Ambulante</option>
+               <option value="panaderia">Panadería Artesanal</option>
+             </optgroup>
+             <optgroup label="🛍️ Retail y E-Commerce">
+               <option value="ecommerce_ropa">E-commerce Ropa Urbana</option>
+               <option value="importacion_tecnologia">Importación de Smartwatches</option>
+               <option value="tienda_mascotas">Pet Shop Online</option>
+               <option value="cosmetica_natural">Cosmética Natural</option>
+             </optgroup>
+             <optgroup label="💻 Servicios B2B y Digitales">
+               <option value="agencia_marketing">Agencia de Marketing</option>
+               <option value="desarrollo_web">Desarrollo Web / Software</option>
+               <option value="consultoria_contable">Consultoría Contable</option>
+               <option value="asistente_virtual">Asistencia Virtual</option>
+             </optgroup>
+             <optgroup label="💅 Salud, Bienestar y Belleza">
+               <option value="barberia">Barbería / Salón</option>
+               <option value="estudio_unas">Estudio de Uñas (Nail Bar)</option>
+               <option value="gimnasio_boutique">Gimnasio Funcional</option>
+               <option value="consultorio_psicologico">Consultorio Psicológico Online</option>
+             </optgroup>
+             <optgroup label="📚 Educación, Eventos y Ocio">
+               <option value="cursos_online">Academia de Cursos Pregrabados</option>
+               <option value="organizacion_bodas">Wedding Planner</option>
+               <option value="clases_refuerzo">Centro de Refuerzo Escolar</option>
+               <option value="animacion_infantil">Shows y Animación Infantil</option>
+             </optgroup>
+           </select>
+           <button onClick={() => cargarPlantilla('vacio')} className="cursor-pointer px-4 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">🗑️ Limpiar Todo</button>
         </div>
 
         <div className="flex justify-center mb-8">
@@ -522,7 +704,7 @@ export default function Home() {
                 <section>
                   <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
                      <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400">1. Datos y Capital</h2>
-                     <select value={formData.moneda} onChange={e => handleSimple('moneda', e.target.value)} className="p-1 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+                     <select value={formData.moneda} onChange={e => handleSimple('moneda', e.target.value)} className="cursor-pointer p-1 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none">
                         <option value="S/">Soles (S/)</option>
                         <option value="USD">Dólares (USD)</option>
                         <option value="EUR">Euros (€)</option>
@@ -581,7 +763,7 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Régimen Tributario</label>
-                      <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none text-sm cursor-pointer">
+                      <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="cursor-pointer w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none text-sm">
                         <option value="NRUS">Nuevo RUS (Cuota Fija)</option>
                         <option value="RER">RER (1.5% Ingresos)</option>
                         <option value="MYPE">Régimen General (1% cuenta)</option>
@@ -816,7 +998,7 @@ export default function Home() {
                     {consejoIA && (
                        <form onSubmit={enviarMensajeChat} className="relative z-10 border border-t-0 border-slate-700 rounded-b-lg overflow-hidden flex">
                           <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Pregúntale al asesor: ¿Qué pasa si contrato un repartidor?" className="flex-1 bg-slate-900 p-3 text-sm text-white outline-none placeholder:text-slate-500" disabled={cargandoChat} />
-                          <button type="submit" disabled={cargandoChat || !chatInput.trim()} className="bg-indigo-600 hover:bg-indigo-500 px-4 font-bold text-white disabled:opacity-50 cursor-pointer transition-colors">Enviar</button>
+                          <button type="submit" disabled={cargandoChat || !chatInput.trim()} className="cursor-pointer bg-indigo-600 hover:bg-indigo-500 px-4 font-bold text-white disabled:opacity-50 transition-colors">Enviar</button>
                        </form>
                     )}
                   </div>
