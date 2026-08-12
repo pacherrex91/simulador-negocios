@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
-// --- 1. CATÁLOGO DE 20 PLANTILLAS (SaaS) ---
+// --- CATÁLOGO EXPANDIDO DE 50 PLANTILLAS ---
 const TEMPLATES = {
   vacio: {
     nombre_idea: "", sector: "", moneda: "S/", capital_disponible: 10000,
@@ -13,178 +13,68 @@ const TEMPLATES = {
     gastos_fijos: { marketing: 0, logistica: 0, sueldo_emprendedor: 0, otros: 0 },
     ventas: { pesimista: 0, base: 0, optimista: 0, crecimiento_mensual: 0 },
     regimen_tributario: "NRUS", inflacion_anual: 3.0,
-    solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+    financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0
   },
 
-  // 🍔 GASTRONOMÍA Y ALIMENTOS
-  cafeteria: {
-    nombre_idea: "Cafetería de Especialidad", sector: "Gastronomía", moneda: "S/", capital_disponible: 25000,
-    inversion: { insumos: 2000, equipos: 15000, empaques: 1000, permisos: 800, otros: 1200 },
-    precio_venta: 12, costo_directo: 4,
-    gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1500, otros: 2000 },
-    ventas: { pesimista: 400, base: 800, optimista: 1200, crecimiento_mensual: 3 },
-    regimen_tributario: "MYPE", inflacion_anual: 4.0, solicitar_prestamo: true, tea: 18.0, plazo_meses: 24
-  },
-  dark_kitchen: {
-    nombre_idea: "Dark Kitchen (Hamburguesas)", sector: "Gastronomía", moneda: "S/", capital_disponible: 15000,
-    inversion: { insumos: 1500, equipos: 8000, empaques: 800, permisos: 500, otros: 1000 },
-    precio_venta: 22, costo_directo: 9,
-    gastos_fijos: { marketing: 800, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, 
-    ventas: { pesimista: 300, base: 600, optimista: 900, crecimiento_mensual: 5 },
-    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  food_truck: {
-    nombre_idea: "Food Truck Ambulante", sector: "Gastronomía", moneda: "S/", capital_disponible: 35000,
-    inversion: { insumos: 1000, equipos: 25000, empaques: 500, permisos: 1500, otros: 2000 },
-    precio_venta: 18, costo_directo: 7,
-    gastos_fijos: { marketing: 300, logistica: 400, sueldo_emprendedor: 1500, otros: 800 },
-    ventas: { pesimista: 500, base: 1000, optimista: 1500, crecimiento_mensual: 2 },
-    regimen_tributario: "RER", inflacion_anual: 3.0, solicitar_prestamo: true, tea: 20.0, plazo_meses: 36
-  },
-  panaderia: {
-    nombre_idea: "Panadería Artesanal / Masa Madre", sector: "Gastronomía", moneda: "S/", capital_disponible: 20000,
-    inversion: { insumos: 1200, equipos: 12000, empaques: 400, permisos: 600, otros: 1000 },
-    precio_venta: 15, costo_directo: 4,
-    gastos_fijos: { marketing: 200, logistica: 100, sueldo_emprendedor: 1200, otros: 1800 },
-    ventas: { pesimista: 600, base: 1200, optimista: 2000, crecimiento_mensual: 4 },
-    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
+  // 🍔 GASTRONOMÍA Y ALIMENTOS (10)
+  cafeteria: { nombre_idea: "Cafetería de Especialidad", sector: "Gastronomía", moneda: "S/", capital_disponible: 25000, inversion: { insumos: 2000, equipos: 15000, empaques: 1000, permisos: 800, otros: 1200 }, precio_venta: 12, costo_directo: 4, gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1500, otros: 2000 }, ventas: { pesimista: 400, base: 800, optimista: 1200, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  dark_kitchen: { nombre_idea: "Dark Kitchen (Delivery)", sector: "Gastronomía", moneda: "S/", capital_disponible: 15000, inversion: { insumos: 1500, equipos: 8000, empaques: 800, permisos: 500, otros: 1000 }, precio_venta: 22, costo_directo: 9, gastos_fijos: { marketing: 800, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, ventas: { pesimista: 300, base: 600, optimista: 900, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  food_truck: { nombre_idea: "Food Truck Ambulante", sector: "Gastronomía", moneda: "S/", capital_disponible: 35000, inversion: { insumos: 1000, equipos: 25000, empaques: 500, permisos: 1500, otros: 2000 }, precio_venta: 18, costo_directo: 7, gastos_fijos: { marketing: 300, logistica: 400, sueldo_emprendedor: 1500, otros: 800 }, ventas: { pesimista: 500, base: 1000, optimista: 1500, crecimiento_mensual: 2 }, regimen_tributario: "RER", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  panaderia: { nombre_idea: "Panadería Artesanal", sector: "Gastronomía", moneda: "S/", capital_disponible: 20000, inversion: { insumos: 1200, equipos: 12000, empaques: 400, permisos: 600, otros: 1000 }, precio_venta: 15, costo_directo: 4, gastos_fijos: { marketing: 200, logistica: 100, sueldo_emprendedor: 1200, otros: 1800 }, ventas: { pesimista: 600, base: 1200, optimista: 2000, crecimiento_mensual: 4 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  restaurante_menu: { nombre_idea: "Restaurante de Menú Diario", sector: "Gastronomía", moneda: "S/", capital_disponible: 15000, inversion: { insumos: 1500, equipos: 6000, empaques: 200, permisos: 800, otros: 2000 }, precio_venta: 14, costo_directo: 7, gastos_fijos: { marketing: 100, logistica: 0, sueldo_emprendedor: 1200, otros: 2500 }, ventas: { pesimista: 800, base: 1500, optimista: 2200, crecimiento_mensual: 1 }, regimen_tributario: "NRUS", inflacion_anual: 5.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  cevicheria: { nombre_idea: "Cevichería / Pescados", sector: "Gastronomía", moneda: "S/", capital_disponible: 30000, inversion: { insumos: 2500, equipos: 12000, empaques: 500, permisos: 1000, otros: 3000 }, precio_venta: 35, costo_directo: 14, gastos_fijos: { marketing: 500, logistica: 100, sueldo_emprendedor: 2000, otros: 3500 }, ventas: { pesimista: 300, base: 700, optimista: 1200, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  pizzeria: { nombre_idea: "Pizzería Artesanal", sector: "Gastronomía", moneda: "S/", capital_disponible: 28000, inversion: { insumos: 1500, equipos: 16000, empaques: 800, permisos: 600, otros: 2000 }, precio_venta: 30, costo_directo: 9, gastos_fijos: { marketing: 400, logistica: 500, sueldo_emprendedor: 1500, otros: 2200 }, ventas: { pesimista: 400, base: 800, optimista: 1400, crecimiento_mensual: 4 }, regimen_tributario: "RER", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  jugueria: { nombre_idea: "Juguería y Saludables", sector: "Gastronomía", moneda: "S/", capital_disponible: 10000, inversion: { insumos: 800, equipos: 4000, empaques: 400, permisos: 400, otros: 1000 }, precio_venta: 10, costo_directo: 3, gastos_fijos: { marketing: 100, logistica: 50, sueldo_emprendedor: 1000, otros: 1200 }, ventas: { pesimista: 600, base: 1200, optimista: 1800, crecimiento_mensual: 2 }, regimen_tributario: "NRUS", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  pasteleria: { nombre_idea: "Pastelería Fina / Tortas", sector: "Gastronomía", moneda: "S/", capital_disponible: 18000, inversion: { insumos: 1000, equipos: 10000, empaques: 800, permisos: 500, otros: 1500 }, precio_venta: 60, costo_directo: 18, gastos_fijos: { marketing: 300, logistica: 200, sueldo_emprendedor: 1200, otros: 1500 }, ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  bar_restaurante: { nombre_idea: "Bar & Restobar", sector: "Gastronomía / Ocio", moneda: "S/", capital_disponible: 50000, inversion: { insumos: 5000, equipos: 20000, empaques: 500, permisos: 3000, otros: 8000 }, precio_venta: 25, costo_directo: 8, gastos_fijos: { marketing: 1000, logistica: 300, sueldo_emprendedor: 2500, otros: 5000 }, ventas: { pesimista: 800, base: 1800, optimista: 3000, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
 
-  // 🛍️ RETAIL Y E-COMMERCE
-  ecommerce_ropa: {
-    nombre_idea: "E-commerce Ropa Urbana", sector: "Retail / Moda", moneda: "S/", capital_disponible: 8000,
-    inversion: { insumos: 5000, equipos: 500, empaques: 300, permisos: 150, otros: 500 },
-    precio_venta: 80, costo_directo: 35,
-    gastos_fijos: { marketing: 1000, logistica: 400, sueldo_emprendedor: 1000, otros: 300 },
-    ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 8 },
-    regimen_tributario: "RER", inflacion_anual: 2.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  importacion_tecnologia: {
-    nombre_idea: "Importación de Smartwatches", sector: "E-commerce / Tech", moneda: "USD", capital_disponible: 3000,
-    inversion: { insumos: 2000, equipos: 200, empaques: 100, permisos: 100, otros: 200 },
-    precio_venta: 45, costo_directo: 18,
-    gastos_fijos: { marketing: 300, logistica: 150, sueldo_emprendedor: 500, otros: 100 },
-    ventas: { pesimista: 30, base: 100, optimista: 200, crecimiento_mensual: 10 },
-    regimen_tributario: "NRUS", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  tienda_mascotas: {
-    nombre_idea: "Pet Shop Online (Accesorios)", sector: "Retail / Mascotas", moneda: "S/", capital_disponible: 5000,
-    inversion: { insumos: 3000, equipos: 300, empaques: 200, permisos: 150, otros: 400 },
-    precio_venta: 40, costo_directo: 15,
-    gastos_fijos: { marketing: 400, logistica: 300, sueldo_emprendedor: 800, otros: 200 },
-    ventas: { pesimista: 80, base: 200, optimista: 350, crecimiento_mensual: 6 },
-    regimen_tributario: "NRUS", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  cosmetica_natural: {
-    nombre_idea: "Línea de Cosmética Natural", sector: "Retail / Salud", moneda: "S/", capital_disponible: 6000,
-    inversion: { insumos: 2500, equipos: 1000, empaques: 800, permisos: 1200, otros: 500 }, 
-    precio_venta: 35, costo_directo: 12,
-    gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1000, otros: 300 },
-    ventas: { pesimista: 100, base: 250, optimista: 400, crecimiento_mensual: 7 },
-    regimen_tributario: "RER", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
+  // 🛍️ RETAIL Y E-COMMERCE (10)
+  ecommerce_ropa: { nombre_idea: "E-commerce Ropa Urbana", sector: "Retail / E-commerce", moneda: "S/", capital_disponible: 8000, inversion: { insumos: 5000, equipos: 500, empaques: 300, permisos: 150, otros: 500 }, precio_venta: 80, costo_directo: 35, gastos_fijos: { marketing: 1000, logistica: 400, sueldo_emprendedor: 1000, otros: 300 }, ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 8 }, regimen_tributario: "RER", inflacion_anual: 2.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  importacion_tech: { nombre_idea: "Importación Tecnología", sector: "E-commerce", moneda: "USD", capital_disponible: 3000, inversion: { insumos: 2000, equipos: 200, empaques: 100, permisos: 100, otros: 200 }, precio_venta: 45, costo_directo: 18, gastos_fijos: { marketing: 300, logistica: 150, sueldo_emprendedor: 500, otros: 100 }, ventas: { pesimista: 30, base: 100, optimista: 200, crecimiento_mensual: 10 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  tienda_mascotas: { nombre_idea: "Pet Shop Online", sector: "Retail / Mascotas", moneda: "S/", capital_disponible: 5000, inversion: { insumos: 3000, equipos: 300, empaques: 200, permisos: 150, otros: 400 }, precio_venta: 40, costo_directo: 15, gastos_fijos: { marketing: 400, logistica: 300, sueldo_emprendedor: 800, otros: 200 }, ventas: { pesimista: 80, base: 200, optimista: 350, crecimiento_mensual: 6 }, regimen_tributario: "NRUS", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  cosmetica_natural: { nombre_idea: "Cosmética Natural", sector: "Retail / Salud", moneda: "S/", capital_disponible: 6000, inversion: { insumos: 2500, equipos: 1000, empaques: 800, permisos: 1200, otros: 500 }, precio_venta: 35, costo_directo: 12, gastos_fijos: { marketing: 500, logistica: 200, sueldo_emprendedor: 1000, otros: 300 }, ventas: { pesimista: 100, base: 250, optimista: 400, crecimiento_mensual: 7 }, regimen_tributario: "RER", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  tienda_regalos: { nombre_idea: "Tienda de Regalos Personalizados", sector: "Retail", moneda: "S/", capital_disponible: 3000, inversion: { insumos: 1000, equipos: 800, empaques: 400, permisos: 50, otros: 300 }, precio_venta: 50, costo_directo: 15, gastos_fijos: { marketing: 200, logistica: 150, sueldo_emprendedor: 800, otros: 100 }, ventas: { pesimista: 40, base: 100, optimista: 200, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  dropshipping: { nombre_idea: "Tienda Dropshipping", sector: "E-commerce", moneda: "USD", capital_disponible: 1000, inversion: { insumos: 0, equipos: 0, empaques: 0, permisos: 50, otros: 500 }, precio_venta: 30, costo_directo: 10, gastos_fijos: { marketing: 600, logistica: 0, sueldo_emprendedor: 0, otros: 100 }, ventas: { pesimista: 30, base: 150, optimista: 400, crecimiento_mensual: 15 }, regimen_tributario: "NRUS", inflacion_anual: 1.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  venta_zapatillas: { nombre_idea: "Venta de Zapatillas Importadas", sector: "Retail", moneda: "S/", capital_disponible: 12000, inversion: { insumos: 10000, equipos: 200, empaques: 300, permisos: 100, otros: 500 }, precio_venta: 250, costo_directo: 120, gastos_fijos: { marketing: 800, logistica: 400, sueldo_emprendedor: 1000, otros: 300 }, ventas: { pesimista: 20, base: 60, optimista: 120, crecimiento_mensual: 8 }, regimen_tributario: "RER", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  minimarket: { nombre_idea: "Minimarket de Barrio", sector: "Retail", moneda: "S/", capital_disponible: 25000, inversion: { insumos: 12000, equipos: 8000, empaques: 200, permisos: 800, otros: 2000 }, precio_venta: 15, costo_directo: 10, gastos_fijos: { marketing: 0, logistica: 200, sueldo_emprendedor: 1500, otros: 2000 }, ventas: { pesimista: 800, base: 1500, optimista: 2500, crecimiento_mensual: 2 }, regimen_tributario: "NRUS", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  libreria: { nombre_idea: "Librería y Útiles", sector: "Retail", moneda: "S/", capital_disponible: 10000, inversion: { insumos: 6000, equipos: 1500, empaques: 100, permisos: 300, otros: 500 }, precio_venta: 5, costo_directo: 2.5, gastos_fijos: { marketing: 50, logistica: 50, sueldo_emprendedor: 1000, otros: 800 }, ventas: { pesimista: 600, base: 1500, optimista: 3000, crecimiento_mensual: 2 }, regimen_tributario: "NRUS", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  joyeria: { nombre_idea: "Joyería / Bisutería Fina", sector: "Retail", moneda: "S/", capital_disponible: 7000, inversion: { insumos: 4000, equipos: 500, empaques: 600, permisos: 200, otros: 400 }, precio_venta: 80, costo_directo: 25, gastos_fijos: { marketing: 400, logistica: 150, sueldo_emprendedor: 1000, otros: 300 }, ventas: { pesimista: 30, base: 80, optimista: 150, crecimiento_mensual: 6 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
 
-  // 💻 SERVICIOS B2B Y DIGITALES
-  agencia_marketing: {
-    nombre_idea: "Agencia de Marketing Digital", sector: "Servicios B2B", moneda: "USD", capital_disponible: 2000,
-    inversion: { insumos: 0, equipos: 1500, empaques: 0, permisos: 100, otros: 400 }, 
-    precio_venta: 500, costo_directo: 50, 
-    gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1500, otros: 300 },
-    ventas: { pesimista: 2, base: 5, optimista: 10, crecimiento_mensual: 5 },
-    regimen_tributario: "MYPE", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  desarrollo_web: {
-    nombre_idea: "Estudio de Desarrollo Web", sector: "Tecnología / B2B", moneda: "USD", capital_disponible: 1500,
-    inversion: { insumos: 0, equipos: 1000, empaques: 0, permisos: 50, otros: 200 },
-    precio_venta: 800, costo_directo: 100, 
-    gastos_fijos: { marketing: 150, logistica: 0, sueldo_emprendedor: 1200, otros: 200 },
-    ventas: { pesimista: 1, base: 3, optimista: 6, crecimiento_mensual: 4 },
-    regimen_tributario: "RER", inflacion_anual: 2.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  consultoria_contable: {
-    nombre_idea: "Consultoría Contable para Mypes", sector: "Servicios B2B", moneda: "S/", capital_disponible: 3000,
-    inversion: { insumos: 200, equipos: 1500, empaques: 0, permisos: 300, otros: 200 },
-    precio_venta: 250, costo_directo: 0, 
-    gastos_fijos: { marketing: 300, logistica: 100, sueldo_emprendedor: 1500, otros: 400 }, 
-    ventas: { pesimista: 10, base: 25, optimista: 45, crecimiento_mensual: 3 },
-    regimen_tributario: "MYPE", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  asistente_virtual: {
-    nombre_idea: "Servicio de Asistencia Virtual", sector: "Servicios B2B", moneda: "USD", capital_disponible: 1000,
-    inversion: { insumos: 0, equipos: 800, empaques: 0, permisos: 50, otros: 100 },
-    precio_venta: 300, costo_directo: 0, 
-    gastos_fijos: { marketing: 100, logistica: 0, sueldo_emprendedor: 800, otros: 100 },
-    ventas: { pesimista: 2, base: 5, optimista: 8, crecimiento_mensual: 5 },
-    regimen_tributario: "NRUS", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
+  // 💻 SERVICIOS B2B Y DIGITALES (10)
+  agencia_marketing: { nombre_idea: "Agencia de Marketing Digital", sector: "Servicios B2B / Tecnología", moneda: "USD", capital_disponible: 2000, inversion: { insumos: 0, equipos: 1500, empaques: 0, permisos: 100, otros: 400 }, precio_venta: 500, costo_directo: 50, gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1500, otros: 300 }, ventas: { pesimista: 2, base: 5, optimista: 10, crecimiento_mensual: 5 }, regimen_tributario: "MYPE", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  desarrollo_web: { nombre_idea: "Estudio Desarrollo Web", sector: "Tecnología / B2B", moneda: "USD", capital_disponible: 1500, inversion: { insumos: 0, equipos: 1000, empaques: 0, permisos: 50, otros: 200 }, precio_venta: 800, costo_directo: 100, gastos_fijos: { marketing: 150, logistica: 0, sueldo_emprendedor: 1200, otros: 200 }, ventas: { pesimista: 1, base: 3, optimista: 6, crecimiento_mensual: 4 }, regimen_tributario: "RER", inflacion_anual: 2.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  consultoria_contable: { nombre_idea: "Consultoría Contable Mypes", sector: "Servicios B2B", moneda: "S/", capital_disponible: 3000, inversion: { insumos: 200, equipos: 1500, empaques: 0, permisos: 300, otros: 200 }, precio_venta: 250, costo_directo: 0, gastos_fijos: { marketing: 300, logistica: 100, sueldo_emprendedor: 1500, otros: 400 }, ventas: { pesimista: 10, base: 25, optimista: 45, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  asistente_virtual: { nombre_idea: "Asistencia Virtual Freelance", sector: "Servicios Digitales", moneda: "USD", capital_disponible: 1000, inversion: { insumos: 0, equipos: 800, empaques: 0, permisos: 50, otros: 100 }, precio_venta: 300, costo_directo: 0, gastos_fijos: { marketing: 100, logistica: 0, sueldo_emprendedor: 800, otros: 100 }, ventas: { pesimista: 2, base: 5, optimista: 8, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  estudio_fotografia: { nombre_idea: "Estudio de Fotografía B2B", sector: "Servicios / Media", moneda: "S/", capital_disponible: 12000, inversion: { insumos: 500, equipos: 9000, empaques: 0, permisos: 300, otros: 1000 }, precio_venta: 600, costo_directo: 50, gastos_fijos: { marketing: 300, logistica: 200, sueldo_emprendedor: 1500, otros: 800 }, ventas: { pesimista: 3, base: 8, optimista: 15, crecimiento_mensual: 4 }, regimen_tributario: "RER", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  agencia_inmobiliaria: { nombre_idea: "Bróker / Agencia Inmobiliaria", sector: "Servicios / Bienes Raíces", moneda: "USD", capital_disponible: 5000, inversion: { insumos: 0, equipos: 1500, empaques: 0, permisos: 500, otros: 1500 }, precio_venta: 3000, costo_directo: 300, gastos_fijos: { marketing: 800, logistica: 200, sueldo_emprendedor: 1500, otros: 1000 }, ventas: { pesimista: 0, base: 2, optimista: 5, crecimiento_mensual: 1 }, regimen_tributario: "MYPE", inflacion_anual: 2.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  creacion_contenido: { nombre_idea: "Agencia Creadora de Contenido (TikTok/Reels)", sector: "Media / Digital", moneda: "S/", capital_disponible: 4000, inversion: { insumos: 0, equipos: 3000, empaques: 0, permisos: 100, otros: 500 }, precio_venta: 800, costo_directo: 50, gastos_fijos: { marketing: 200, logistica: 100, sueldo_emprendedor: 1200, otros: 300 }, ventas: { pesimista: 2, base: 6, optimista: 12, crecimiento_mensual: 6 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  coworking: { nombre_idea: "Espacio Coworking Pequeño", sector: "Servicios / Inmobiliaria", moneda: "S/", capital_disponible: 30000, inversion: { insumos: 1000, equipos: 15000, empaques: 0, permisos: 1500, otros: 8000 }, precio_venta: 400, costo_directo: 10, gastos_fijos: { marketing: 500, logistica: 0, sueldo_emprendedor: 1500, otros: 6000 }, ventas: { pesimista: 10, base: 25, optimista: 45, crecimiento_mensual: 4 }, regimen_tributario: "MYPE", inflacion_anual: 4.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  consultoria_rh: { nombre_idea: "Consultoría de RRHH / Reclutamiento", sector: "Servicios B2B", moneda: "S/", capital_disponible: 2500, inversion: { insumos: 0, equipos: 1500, empaques: 0, permisos: 200, otros: 500 }, precio_venta: 1200, costo_directo: 100, gastos_fijos: { marketing: 300, logistica: 50, sueldo_emprendedor: 2000, otros: 400 }, ventas: { pesimista: 1, base: 4, optimista: 8, crecimiento_mensual: 3 }, regimen_tributario: "RER", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  software_saas: { nombre_idea: "Plataforma SaaS (Micro SaaS)", sector: "Tecnología / Software", moneda: "USD", capital_disponible: 5000, inversion: { insumos: 0, equipos: 2000, empaques: 0, permisos: 500, otros: 1500 }, precio_venta: 29, costo_directo: 2, gastos_fijos: { marketing: 1000, logistica: 0, sueldo_emprendedor: 1000, otros: 800 }, ventas: { pesimista: 20, base: 100, optimista: 500, crecimiento_mensual: 15 }, regimen_tributario: "MYPE", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
 
-  // 💅 SALUD, BIENESTAR Y BELLEZA
-  barberia: {
-    nombre_idea: "Barbería / Salón Clásico", sector: "Belleza", moneda: "S/", capital_disponible: 12000,
-    inversion: { insumos: 1000, equipos: 7000, empaques: 0, permisos: 500, otros: 2000 }, 
-    precio_venta: 35, costo_directo: 3, 
-    gastos_fijos: { marketing: 300, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, 
-    ventas: { pesimista: 150, base: 300, optimista: 500, crecimiento_mensual: 2 },
-    regimen_tributario: "NRUS", inflacion_anual: 4.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  estudio_unas: {
-    nombre_idea: "Estudio de Uñas (Nail Bar)", sector: "Belleza", moneda: "S/", capital_disponible: 8000,
-    inversion: { insumos: 2000, equipos: 3000, empaques: 0, permisos: 400, otros: 1000 },
-    precio_venta: 60, costo_directo: 8, 
-    gastos_fijos: { marketing: 250, logistica: 0, sueldo_emprendedor: 1000, otros: 1000 }, 
-    ventas: { pesimista: 80, base: 160, optimista: 250, crecimiento_mensual: 3 },
-    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  gimnasio_boutique: {
-    nombre_idea: "Gimnasio Funcional / CrossFit", sector: "Salud / Deportes", moneda: "S/", capital_disponible: 40000,
-    inversion: { insumos: 0, equipos: 35000, empaques: 0, permisos: 1200, otros: 3000 }, 
-    precio_venta: 180, costo_directo: 0, 
-    gastos_fijos: { marketing: 600, logistica: 0, sueldo_emprendedor: 2000, otros: 4000 }, 
-    ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 4 },
-    regimen_tributario: "MYPE", inflacion_anual: 4.0, solicitar_prestamo: true, tea: 16.0, plazo_meses: 36
-  },
-  consultorio_psicologico: {
-    nombre_idea: "Consultorio Psicológico Online", sector: "Salud Mental", moneda: "S/", capital_disponible: 2000,
-    inversion: { insumos: 0, equipos: 1000, empaques: 0, permisos: 200, otros: 300 },
-    precio_venta: 100, costo_directo: 0, 
-    gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1500, otros: 150 }, 
-    ventas: { pesimista: 20, base: 45, optimista: 80, crecimiento_mensual: 5 },
-    regimen_tributario: "NRUS", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
+  // 💅 SALUD, BIENESTAR Y BELLEZA (10)
+  barberia: { nombre_idea: "Barbería Clásica", sector: "Belleza", moneda: "S/", capital_disponible: 12000, inversion: { insumos: 1000, equipos: 7000, empaques: 0, permisos: 500, otros: 2000 }, precio_venta: 35, costo_directo: 3, gastos_fijos: { marketing: 300, logistica: 0, sueldo_emprendedor: 1200, otros: 1500 }, ventas: { pesimista: 150, base: 300, optimista: 500, crecimiento_mensual: 2 }, regimen_tributario: "NRUS", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  estudio_unas: { nombre_idea: "Estudio de Uñas (Nail Bar)", sector: "Belleza", moneda: "S/", capital_disponible: 8000, inversion: { insumos: 2000, equipos: 3000, empaques: 0, permisos: 400, otros: 1000 }, precio_venta: 60, costo_directo: 8, gastos_fijos: { marketing: 250, logistica: 0, sueldo_emprendedor: 1000, otros: 1000 }, ventas: { pesimista: 80, base: 160, optimista: 250, crecimiento_mensual: 3 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  gimnasio_boutique: { nombre_idea: "Gimnasio Funcional", sector: "Salud / Deportes", moneda: "S/", capital_disponible: 40000, inversion: { insumos: 0, equipos: 35000, empaques: 0, permisos: 1200, otros: 3000 }, precio_venta: 180, costo_directo: 0, gastos_fijos: { marketing: 600, logistica: 0, sueldo_emprendedor: 2000, otros: 4000 }, ventas: { pesimista: 50, base: 120, optimista: 250, crecimiento_mensual: 4 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  consultorio_psicologico: { nombre_idea: "Consultorio Psicológico Online", sector: "Salud Mental", moneda: "S/", capital_disponible: 2000, inversion: { insumos: 0, equipos: 1000, empaques: 0, permisos: 200, otros: 300 }, precio_venta: 100, costo_directo: 0, gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1500, otros: 150 }, ventas: { pesimista: 20, base: 45, optimista: 80, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  spa_masajes: { nombre_idea: "Centro de Masajes y Spa", sector: "Bienestar", moneda: "S/", capital_disponible: 18000, inversion: { insumos: 1500, equipos: 8000, empaques: 0, permisos: 800, otros: 3000 }, precio_venta: 120, costo_directo: 15, gastos_fijos: { marketing: 400, logistica: 50, sueldo_emprendedor: 1500, otros: 2500 }, ventas: { pesimista: 50, base: 100, optimista: 180, crecimiento_mensual: 3 }, regimen_tributario: "RER", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  centro_yoga: { nombre_idea: "Estudio de Yoga y Pilates", sector: "Bienestar", moneda: "S/", capital_disponible: 15000, inversion: { insumos: 500, equipos: 4000, empaques: 0, permisos: 600, otros: 4000 }, precio_venta: 150, costo_directo: 0, gastos_fijos: { marketing: 300, logistica: 0, sueldo_emprendedor: 1500, otros: 2000 }, ventas: { pesimista: 30, base: 70, optimista: 120, crecimiento_mensual: 4 }, regimen_tributario: "NRUS", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  clinica_dental: { nombre_idea: "Consultorio Odontológico", sector: "Salud", moneda: "S/", capital_disponible: 45000, inversion: { insumos: 3000, equipos: 30000, empaques: 0, permisos: 1500, otros: 5000 }, precio_venta: 150, costo_directo: 40, gastos_fijos: { marketing: 500, logistica: 100, sueldo_emprendedor: 2500, otros: 2500 }, ventas: { pesimista: 40, base: 100, optimista: 200, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  nutricionista: { nombre_idea: "Asesoría Nutricional Personalizada", sector: "Salud / Bienestar", moneda: "S/", capital_disponible: 2500, inversion: { insumos: 0, equipos: 1500, empaques: 100, permisos: 300, otros: 200 }, precio_venta: 120, costo_directo: 5, gastos_fijos: { marketing: 250, logistica: 0, sueldo_emprendedor: 1500, otros: 400 }, ventas: { pesimista: 15, base: 40, optimista: 80, crecimiento_mensual: 5 }, regimen_tributario: "NRUS", inflacion_anual: 2.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  centro_estetica: { nombre_idea: "Medicina Estética (Láser/Botox)", sector: "Salud / Belleza", moneda: "USD", capital_disponible: 25000, inversion: { insumos: 2000, equipos: 18000, empaques: 0, permisos: 1000, otros: 2000 }, precio_venta: 150, costo_directo: 30, gastos_fijos: { marketing: 800, logistica: 0, sueldo_emprendedor: 1500, otros: 1200 }, ventas: { pesimista: 20, base: 60, optimista: 120, crecimiento_mensual: 4 }, regimen_tributario: "MYPE", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  maquillaje_domicilio: { nombre_idea: "Maquillaje Profesional a Domicilio", sector: "Belleza / Servicios", moneda: "S/", capital_disponible: 3000, inversion: { insumos: 1500, equipos: 500, empaques: 0, permisos: 0, otros: 500 }, precio_venta: 180, costo_directo: 20, gastos_fijos: { marketing: 200, logistica: 300, sueldo_emprendedor: 1000, otros: 100 }, ventas: { pesimista: 10, base: 25, optimista: 50, crecimiento_mensual: 6 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
 
-  // 📚 EDUCACIÓN, EVENTOS Y OCIO
-  cursos_online: {
-    nombre_idea: "Academia de Cursos Pregrabados", sector: "Educación", moneda: "USD", capital_disponible: 1500,
-    inversion: { insumos: 0, equipos: 800, empaques: 0, permisos: 0, otros: 300 }, 
-    precio_venta: 40, costo_directo: 2, 
-    gastos_fijos: { marketing: 500, logistica: 0, sueldo_emprendedor: 500, otros: 100 }, 
-    ventas: { pesimista: 10, base: 50, optimista: 150, crecimiento_mensual: 10 },
-    regimen_tributario: "RER", inflacion_anual: 2.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  organizacion_bodas: {
-    nombre_idea: "Wedding Planner (Organización)", sector: "Eventos", moneda: "S/", capital_disponible: 5000,
-    inversion: { insumos: 500, equipos: 1500, empaques: 0, permisos: 200, otros: 800 }, 
-    precio_venta: 4500, costo_directo: 200, 
-    gastos_fijos: { marketing: 400, logistica: 200, sueldo_emprendedor: 1500, otros: 300 },
-    ventas: { pesimista: 0, base: 2, optimista: 4, crecimiento_mensual: 2 },
-    regimen_tributario: "RER", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  clases_refuerzo: {
-    nombre_idea: "Centro de Refuerzo Escolar", sector: "Educación", moneda: "S/", capital_disponible: 7000,
-    inversion: { insumos: 500, equipos: 3000, empaques: 0, permisos: 400, otros: 1000 }, 
-    precio_venta: 250, costo_directo: 20, 
-    gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1000, otros: 1200 }, 
-    ventas: { pesimista: 15, base: 35, optimista: 60, crecimiento_mensual: 3 },
-    regimen_tributario: "NRUS", inflacion_anual: 3.5, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  },
-  animacion_infantil: {
-    nombre_idea: "Shows y Animación Infantil", sector: "Eventos / Ocio", moneda: "S/", capital_disponible: 4000,
-    inversion: { insumos: 800, equipos: 2000, empaques: 0, permisos: 100, otros: 500 }, 
-    precio_venta: 400, costo_directo: 50, 
-    gastos_fijos: { marketing: 250, logistica: 100, sueldo_emprendedor: 1000, otros: 150 },
-    ventas: { pesimista: 4, base: 10, optimista: 20, crecimiento_mensual: 4 },
-    regimen_tributario: "NRUS", inflacion_anual: 3.0, solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
-  }
+  // 📚 EDUCACIÓN, EVENTOS Y OCIO (10)
+  cursos_online: { nombre_idea: "Academia de Cursos Pregrabados", sector: "Educación / Tecnología", moneda: "USD", capital_disponible: 1500, inversion: { insumos: 0, equipos: 800, empaques: 0, permisos: 0, otros: 300 }, precio_venta: 40, costo_directo: 2, gastos_fijos: { marketing: 500, logistica: 0, sueldo_emprendedor: 500, otros: 100 }, ventas: { pesimista: 10, base: 50, optimista: 150, crecimiento_mensual: 10 }, regimen_tributario: "RER", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  organizacion_bodas: { nombre_idea: "Wedding Planner", sector: "Eventos", moneda: "S/", capital_disponible: 5000, inversion: { insumos: 500, equipos: 1500, empaques: 0, permisos: 200, otros: 800 }, precio_venta: 4500, costo_directo: 200, gastos_fijos: { marketing: 400, logistica: 200, sueldo_emprendedor: 1500, otros: 300 }, ventas: { pesimista: 0, base: 2, optimista: 4, crecimiento_mensual: 2 }, regimen_tributario: "RER", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  clases_refuerzo: { nombre_idea: "Centro de Refuerzo Escolar", sector: "Educación", moneda: "S/", capital_disponible: 7000, inversion: { insumos: 500, equipos: 3000, empaques: 0, permisos: 400, otros: 1000 }, precio_venta: 250, costo_directo: 20, gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1000, otros: 1200 }, ventas: { pesimista: 15, base: 35, optimista: 60, crecimiento_mensual: 3 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  animacion_infantil: { nombre_idea: "Shows y Animación Infantil", sector: "Eventos / Ocio", moneda: "S/", capital_disponible: 4000, inversion: { insumos: 800, equipos: 2000, empaques: 0, permisos: 100, otros: 500 }, precio_venta: 400, costo_directo: 50, gastos_fijos: { marketing: 250, logistica: 100, sueldo_emprendedor: 1000, otros: 150 }, ventas: { pesimista: 4, base: 10, optimista: 20, crecimiento_mensual: 4 }, regimen_tributario: "NRUS", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  agencia_turismo: { nombre_idea: "Agencia de Viajes y Tours", sector: "Turismo / Ocio", moneda: "USD", capital_disponible: 5000, inversion: { insumos: 0, equipos: 1500, empaques: 0, permisos: 800, otros: 1000 }, precio_venta: 500, costo_directo: 350, gastos_fijos: { marketing: 600, logistica: 100, sueldo_emprendedor: 1200, otros: 500 }, ventas: { pesimista: 5, base: 15, optimista: 40, crecimiento_mensual: 5 }, regimen_tributario: "MYPE", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  alquiler_canchas: { nombre_idea: "Alquiler de Canchas Sintéticas", sector: "Deportes / Ocio", moneda: "S/", capital_disponible: 60000, inversion: { insumos: 1000, equipos: 40000, empaques: 0, permisos: 2000, otros: 5000 }, precio_venta: 80, costo_directo: 5, gastos_fijos: { marketing: 300, logistica: 0, sueldo_emprendedor: 2000, otros: 4000 }, ventas: { pesimista: 100, base: 250, optimista: 400, crecimiento_mensual: 3 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  productora_eventos: { nombre_idea: "Productora de Conciertos/Fiestas", sector: "Eventos", moneda: "S/", capital_disponible: 20000, inversion: { insumos: 1000, equipos: 5000, empaques: 0, permisos: 3000, otros: 5000 }, precio_venta: 80, costo_directo: 30, gastos_fijos: { marketing: 2000, logistica: 1000, sueldo_emprendedor: 2000, otros: 2000 }, ventas: { pesimista: 100, base: 300, optimista: 800, crecimiento_mensual: 5 }, regimen_tributario: "MYPE", inflacion_anual: 4.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  academia_baile: { nombre_idea: "Academia de Baile", sector: "Ocio / Educación", moneda: "S/", capital_disponible: 15000, inversion: { insumos: 500, equipos: 5000, empaques: 0, permisos: 800, otros: 3000 }, precio_venta: 150, costo_directo: 0, gastos_fijos: { marketing: 400, logistica: 0, sueldo_emprendedor: 1500, otros: 2500 }, ventas: { pesimista: 30, base: 80, optimista: 150, crecimiento_mensual: 4 }, regimen_tributario: "NRUS", inflacion_anual: 3.5, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  tutorias_idiomas: { nombre_idea: "Enseñanza de Idiomas Online", sector: "Educación", moneda: "USD", capital_disponible: 1000, inversion: { insumos: 0, equipos: 600, empaques: 0, permisos: 0, otros: 200 }, precio_venta: 80, costo_directo: 5, gastos_fijos: { marketing: 200, logistica: 0, sueldo_emprendedor: 1000, otros: 100 }, ventas: { pesimista: 10, base: 25, optimista: 50, crecimiento_mensual: 6 }, regimen_tributario: "NRUS", inflacion_anual: 2.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 },
+  estudio_musica: { nombre_idea: "Estudio de Grabación Musical", sector: "Arte / Media", moneda: "S/", capital_disponible: 25000, inversion: { insumos: 500, equipos: 18000, empaques: 0, permisos: 500, otros: 3000 }, precio_venta: 80, costo_directo: 0, gastos_fijos: { marketing: 300, logistica: 0, sueldo_emprendedor: 1500, otros: 1200 }, ventas: { pesimista: 20, base: 60, optimista: 120, crecimiento_mensual: 3 }, regimen_tributario: "RER", inflacion_anual: 3.0, financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false, tea: 0 }
 };
 
 export default function Home() {
@@ -464,6 +354,12 @@ export default function Home() {
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
+  const wiPrecio = formData.precio_venta * (1 + (whatIf.variacionPrecio / 100));
+  const wiCosto = formData.costo_directo * (1 + (whatIf.variacionCostos / 100));
+  const wiMargen = wiPrecio - wiCosto;
+  const wiGastos = Object.values(formData.gastos_fijos).reduce((a, b) => a + b, 0);
+  const wiPuntoEq = wiMargen > 0 ? Math.ceil(wiGastos / wiMargen) : 9999;
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8 font-sans text-slate-800 dark:text-slate-200 transition-colors duration-300 print:bg-white print:p-0 print:m-0">
       
@@ -564,8 +460,8 @@ export default function Home() {
                     <div className="print-card-value">{res.base.margen_neto}%</div>
                  </div>
                  <div className="print-card">
-                    <div className="print-card-title">Margen de Seguridad</div>
-                    <div className="print-card-value">{res.metricas.margen_seguridad}%</div>
+                    <div className="print-card-title">Nivel de Presencia</div>
+                    <div className="print-card-value">{res.metricas.dedicacion?.porcentaje_presencial || 0}%</div>
                  </div>
               </div>
 
@@ -614,6 +510,7 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto print:hidden">
         
+        {/* TOPBAR: USUARIO, TEMA, TOUR Y NUBE */}
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
@@ -640,7 +537,7 @@ export default function Home() {
           <p className="text-slate-500 dark:text-slate-400 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
-        {/* -------------------- NUEVO MENÚ DESPLEGABLE (20 PLANTILLAS) -------------------- */}
+        {/* -------------------- MENÚ DESPLEGABLE (50 PLANTILLAS) -------------------- */}
         <div className="flex justify-center items-center gap-3 mb-8 flex-wrap">
            <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Catálogo SaaS:</span>
            <select 
@@ -654,30 +551,60 @@ export default function Home() {
                <option value="dark_kitchen">Dark Kitchen (Delivery)</option>
                <option value="food_truck">Food Truck Ambulante</option>
                <option value="panaderia">Panadería Artesanal</option>
+               <option value="restaurante_menu">Restaurante de Menú</option>
+               <option value="cevicheria">Cevichería</option>
+               <option value="pizzeria">Pizzería Artesanal</option>
+               <option value="jugueria">Juguería</option>
+               <option value="pasteleria">Pastelería / Tortas</option>
+               <option value="bar_restaurante">Restobar</option>
              </optgroup>
              <optgroup label="🛍️ Retail y E-Commerce">
                <option value="ecommerce_ropa">E-commerce Ropa Urbana</option>
-               <option value="importacion_tecnologia">Importación de Smartwatches</option>
+               <option value="importacion_tech">Importación de Tecnología</option>
                <option value="tienda_mascotas">Pet Shop Online</option>
                <option value="cosmetica_natural">Cosmética Natural</option>
+               <option value="tienda_regalos">Regalos Personalizados</option>
+               <option value="dropshipping">Tienda Dropshipping</option>
+               <option value="venta_zapatillas">Venta de Zapatillas</option>
+               <option value="minimarket">Minimarket de Barrio</option>
+               <option value="libreria">Librería y Útiles</option>
+               <option value="joyeria">Joyería Fina</option>
              </optgroup>
              <optgroup label="💻 Servicios B2B y Digitales">
                <option value="agencia_marketing">Agencia de Marketing</option>
-               <option value="desarrollo_web">Desarrollo Web / Software</option>
+               <option value="desarrollo_web">Estudio de Desarrollo Web</option>
                <option value="consultoria_contable">Consultoría Contable</option>
                <option value="asistente_virtual">Asistencia Virtual</option>
+               <option value="estudio_fotografia">Estudio de Fotografía</option>
+               <option value="agencia_inmobiliaria">Agencia Inmobiliaria</option>
+               <option value="creacion_contenido">Agencia Creación de Contenido</option>
+               <option value="coworking">Coworking Space</option>
+               <option value="consultoria_rh">Consultoría de RRHH</option>
+               <option value="software_saas">Micro SaaS</option>
              </optgroup>
              <optgroup label="💅 Salud, Bienestar y Belleza">
                <option value="barberia">Barbería / Salón</option>
-               <option value="estudio_unas">Estudio de Uñas (Nail Bar)</option>
-               <option value="gimnasio_boutique">Gimnasio Funcional</option>
+               <option value="estudio_unas">Estudio de Uñas</option>
+               <option value="gimnasio_boutique">Gimnasio / CrossFit</option>
                <option value="consultorio_psicologico">Consultorio Psicológico Online</option>
+               <option value="spa_masajes">Centro de Spa</option>
+               <option value="centro_yoga">Estudio de Yoga</option>
+               <option value="clinica_dental">Clínica Dental</option>
+               <option value="nutricionista">Asesoría Nutricional</option>
+               <option value="centro_estetica">Centro de Estética</option>
+               <option value="maquillaje_domicilio">Maquillaje a Domicilio</option>
              </optgroup>
              <optgroup label="📚 Educación, Eventos y Ocio">
                <option value="cursos_online">Academia de Cursos Pregrabados</option>
                <option value="organizacion_bodas">Wedding Planner</option>
                <option value="clases_refuerzo">Centro de Refuerzo Escolar</option>
                <option value="animacion_infantil">Shows y Animación Infantil</option>
+               <option value="agencia_turismo">Agencia de Turismo</option>
+               <option value="alquiler_canchas">Alquiler de Canchas Sintéticas</option>
+               <option value="productora_eventos">Productora de Eventos</option>
+               <option value="academia_baile">Academia de Baile</option>
+               <option value="tutorias_idiomas">Enseñanza de Idiomas Online</option>
+               <option value="estudio_musica">Estudio de Grabación Musical</option>
              </optgroup>
            </select>
            <button onClick={() => cargarPlantilla('vacio')} className="cursor-pointer px-4 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">🗑️ Limpiar Todo</button>
@@ -813,6 +740,25 @@ export default function Home() {
                        </div>
                     </div>
                   </div>
+
+                  {/* NUEVO MÓDULO DE PRESENCIA Y TIEMPO (LA MÉTRICA DE "ESCLAVITUD") */}
+                  {res.metricas.dedicacion && (
+                    <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-sm text-center">
+                       <h3 className="font-bold text-indigo-800 dark:text-indigo-400 text-sm mb-2 uppercase tracking-wide">Nivel de Esclavitud & Tiempo ⏱️</h3>
+                       <p className="text-xs text-indigo-600 dark:text-indigo-300 mb-4 px-4">Calculado según la naturaleza de la industria y tu plan de inversión/sueldos en el Año 1.</p>
+                       <div className="flex justify-around items-center">
+                          <div>
+                            <p className="text-3xl font-black text-indigo-700 dark:text-indigo-300">{res.metricas.dedicacion.horas_semana}<span className="text-sm font-medium"> h/sem</span></p>
+                            <p className="text-xs font-bold text-indigo-500 mt-1 uppercase">Dedicación Requerida</p>
+                          </div>
+                          <div className="w-px h-10 bg-indigo-200 dark:bg-indigo-700"></div>
+                          <div>
+                            <p className="text-3xl font-black text-indigo-700 dark:text-indigo-300">{res.metricas.dedicacion.porcentaje_presencial}%</p>
+                            <p className="text-xs font-bold text-indigo-500 mt-1 uppercase">Presencialidad Física</p>
+                          </div>
+                       </div>
+                    </div>
+                  )}
 
                   {/* GESTIÓN DEL CAPITAL Y PRÉSTAMOS */}
                   <div className="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm relative overflow-hidden">
