@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -9,26 +9,40 @@ export default function Home() {
   const [historial, setHistorial] = useState<any[]>([]);
 
   // --- ESTADOS DEL SIMULADOR ---
-  const [formData, setFormData] = useState({
-    nombre_idea: "Cocina Oculta / Delivery",
-    sector: "Alimentos",
-    capital_disponible: 10000,
+  const initialForm = {
+    nombre_idea: "Cocina Oculta / Delivery", sector: "Alimentos",
+    moneda: "S/", capital_disponible: 10000,
     inversion: { insumos: 500, equipos: 2000, empaques: 300, permisos: 150, otros: 200 },
-    precio_venta: 18,
-    costo_directo: 11,
+    precio_venta: 18, costo_directo: 11,
     gastos_fijos: { marketing: 200, logistica: 150, sueldo_emprendedor: 1000, otros: 100 },
     ventas: { pesimista: 60, base: 120, optimista: 200, crecimiento_mensual: 5 },
-    regimen_tributario: "NRUS",
-    inflacion_anual: 3.0
-  });
+    regimen_tributario: "NRUS", inflacion_anual: 3.0,
+    solicitar_prestamo: false, tea: 15.0, plazo_meses: 12
+  };
 
+  const [formData, setFormData] = useState(initialForm);
   const [res, setRes] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   
-  // --- ESTADOS DE LA IA Y COMPARACIÓN ---
+  // --- AUTOGUARDADO (LOCALSTORAGE) ---
+  useEffect(() => {
+    const savedData = localStorage.getItem('simuladorDraft');
+    if (savedData) setFormData(JSON.parse(savedData));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('simuladorDraft', JSON.stringify(formData));
+  }, [formData]);
+
+  // --- ESTADOS DE LA IA Y CHAT ---
   const [consejoIA, setConsejoIA] = useState("");
   const [cargandoIA, setCargandoIA] = useState(false);
   const [activeRol, setActiveRol] = useState("");
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [cargandoChat, setCargandoChat] = useState(false);
+
+  // --- ESTADOS DE COMPARACIÓN ---
   const [selectedToCompare, setSelectedToCompare] = useState<any[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
@@ -37,29 +51,41 @@ export default function Home() {
   const [whatIf, setWhatIf] = useState({ variacionPrecio: 0, variacionCostos: 0 });
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showCompareModal) setShowCompareModal(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && showCompareModal) setShowCompareModal(false); };
+    window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showCompareModal]);
 
   const pedirConsejo = async (rol: string) => {
-    setActiveRol(rol);
-    setCargandoIA(true);
-    setConsejoIA("El consejero está analizando tus métricas avanzadas...");
+    setActiveRol(rol); setCargandoIA(true); setConsejoIA("El consejero está analizando tus métricas avanzadas...");
     try {
       const response = await fetch('https://simulador-backend-ytbv.onrender.com/consejero', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rol, idea: formData.nombre_idea, sector: formData.sector, metricas: res.metricas })
       });
       const data = await response.json();
       setConsejoIA(data.consejo);
-    } catch (error) {
-      setConsejoIA("Hubo un error al contactar al consejero.");
-    }
+    } catch (error) { setConsejoIA("Hubo un error al contactar al consejero."); }
     setCargandoIA(false);
+  };
+
+  const enviarMensajeChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const nuevoMensaje = { role: "user", content: chatInput };
+    setChatHistory([...chatHistory, nuevoMensaje]);
+    setChatInput(""); setCargandoChat(true);
+    
+    try {
+      const response = await fetch('https://simulador-backend-ytbv.onrender.com/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: chatHistory, question: chatInput, idea: formData.nombre_idea, sector: formData.sector, metricas: res.metricas })
+      });
+      const data = await response.json();
+      setChatHistory(prev => [...prev, { role: "model", content: data.respuesta }]);
+    } catch (error) {
+      setChatHistory(prev => [...prev, { role: "model", content: "Error de conexión. Intenta de nuevo." }]);
+    }
+    setCargandoChat(false);
   };
 
   const cargarHistorial = async () => {
@@ -67,34 +93,31 @@ export default function Home() {
     if (data) setHistorial(data);
   };
 
-  // --- FUNCIONES DE SELECCIÓN, ORDEN Y ELIMINACIÓN ---
   const eliminarSimulacion = async (id: string) => {
-    if(!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
+    if(!window.confirm("¿Seguro que deseas eliminar esta simulación?")) return;
     await supabase.from('simulations').delete().eq('id', id);
     setSelectedToCompare(prev => prev.filter(s => s.id !== id));
     cargarHistorial();
+  };
+
+  const editarSimulacion = (item: any) => {
+    setFormData(item.inputs);
+    setActiveTab('simulador');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const toggleCompare = (item: any) => {
     if (selectedToCompare.some(s => s.id === item.id)) setSelectedToCompare(selectedToCompare.filter(s => s.id !== item.id));
     else setSelectedToCompare([...selectedToCompare, item]);
   };
-
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) setSelectedToCompare([...historial]);
-    else setSelectedToCompare([]);
+    if (e.target.checked) setSelectedToCompare([...historial]); else setSelectedToCompare([]);
   };
-
-  const deseleccionarTodos = () => {
-    setSelectedToCompare([]);
-  };
-
   const eliminarSeleccionados = async () => {
-    if (!window.confirm(`¿Estás seguro de eliminar las ${selectedToCompare.length} simulaciones seleccionadas permanentemente?`)) return;
+    if (!window.confirm(`¿Eliminar los ${selectedToCompare.length} proyectos seleccionados permanentemente?`)) return;
     const ids = selectedToCompare.map(item => item.id);
     await supabase.from('simulations').delete().in('id', ids);
-    setSelectedToCompare([]);
-    cargarHistorial();
+    setSelectedToCompare([]); cargarHistorial();
   };
 
   const requestSort = (key: string) => {
@@ -135,7 +158,6 @@ export default function Home() {
 
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
 
-  // --- MOTOR DE EJECUCIÓN Y EXPORTACIÓN ---
   const ejecutarSimulacion = async () => {
     setLoading(true);
     try {
@@ -153,45 +175,36 @@ export default function Home() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setConsejoIA(""); setActiveRol("");
+    setConsejoIA(""); setActiveRol(""); setChatHistory([]);
     ejecutarSimulacion();
   };
 
-  const exportarPDF = () => {
-    window.print();
-  };
+  const exportarPDF = () => { window.print(); };
 
   const exportarAExcel = (nombre: string, resultados: any) => {
     if (!resultados || !resultados.base) return;
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    
     csvContent += `REPORTE DE DECISIÓN DE INVERSIÓN: ${nombre.toUpperCase()}\n\n`;
     csvContent += `1. VEREDICTO FINAL\n`;
     csvContent += `Score de Inversión,${resultados.metricas?.score || 'N/A'} / 100\n`;
     csvContent += `Recomendación,${resultados.metricas?.recomendacion?.estado || 'N/A'} - ${resultados.metricas?.recomendacion?.msg || ''}\n\n`;
-
     csvContent += `2. MÉTRICAS CLAVE\n`;
-    csvContent += `Inversión Total,S/ ${resultados.metricas.inversion_total}\n`;
-    csvContent += `Ganancia Año 1 (Promedio),S/ ${resultados.riesgo.ganancia_promedio_anio}\n`;
+    csvContent += `Inversión Total,${formData.moneda} ${resultados.metricas.inversion_total}\n`;
+    csvContent += `Ganancia Año 1 (Promedio),${formData.moneda} ${resultados.riesgo.ganancia_promedio_anio}\n`;
     csvContent += `Retorno de Inversión (ROI),${resultados.metricas?.roi || 'N/A'}%\n`;
-    csvContent += `Margen Neto (Base),${resultados.base?.margen_neto || 'N/A'}%\n`;
     csvContent += `Punto de Equilibrio,${resultados.metricas.punto_equilibrio} ventas/mes\n`;
     csvContent += `Probabilidad de Pérdida,${resultados.riesgo.probabilidad_perdida}%\n`;
     csvContent += `Recuperación del Capital (Payback),Mes ${resultados.base.mes_recuperacion}\n\n`;
-
     csvContent += `3. PROYECCIÓN MENSUAL (ESCENARIO BASE)\n`;
-    csvContent += "Mes,Flujo de Caja Acumulado (S/)\n";
+    csvContent += `Mes,Flujo de Caja Acumulado (${formData.moneda})\n`;
     resultados.base.caja_mes_a_mes.forEach((monto: number, index: number) => {
       csvContent += `Mes ${index + 1},${monto}\n`;
     });
-
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
     link.setAttribute("download", `Analisis_Inversion_${nombre.replace(/ /g, "_")}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const handleNested = (category: string, field: string, value: number) => {
@@ -202,26 +215,18 @@ export default function Home() {
   };
 
   const invTotal = Object.values(formData.inversion).reduce((a, b) => a + b, 0);
-  
   const chartData = [];
   if (res) {
     for(let i=0; i<12; i++) {
-        chartData.push({
-            mes: `Mes ${i+1}`,
-            base: res.base.caja_mes_a_mes[i],
-            pesimista: res.pesimista.caja_mes_a_mes[i],
-            optimista: res.optimista.caja_mes_a_mes[i]
-        });
+        chartData.push({ mes: `Mes ${i+1}`, base: res.base.caja_mes_a_mes[i], pesimista: res.pesimista.caja_mes_a_mes[i], optimista: res.optimista.caja_mes_a_mes[i] });
     }
   }
 
   const formatFecha = (isoString: string) => {
     if (!isoString) return "";
-    const date = new Date(isoString);
-    const now = new Date();
+    const date = new Date(isoString); const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
+    const diffMins = Math.floor(diffMs / 60000); const diffHours = Math.floor(diffMins / 60);
     if (diffMins < 60) return `Hace ${diffMins} min`;
     if (diffHours < 24) return `Hace ${diffHours} h`;
     return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
@@ -235,35 +240,155 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800 print:bg-white print:p-0 print:m-0">
-      <div className="max-w-7xl mx-auto print:max-w-full">
-        
-        <header className="mb-6 text-center print:hidden">
+      
+      {/* -------------------- ESTILOS EXCLUSIVOS PARA EL REPORTE PDF (IMPRESIÓN) -------------------- */}
+      <style dangerouslySetContent={{__html: `
+        @media print {
+          @page { size: A4; margin: 15mm; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .print-header { border-bottom: 4px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+          .print-title { font-size: 28px; font-weight: 900; color: #1e1b4b; text-transform: uppercase; letter-spacing: 1px; }
+          .print-subtitle { font-size: 14px; color: #64748b; font-weight: bold; }
+          .print-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+          .print-card { border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; text-align: center; }
+          .print-card-title { font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+          .print-card-value { font-size: 20px; font-weight: 900; color: #0f172a; }
+          .print-veredicto { border: 2px solid #10b981; background-color: #ecfdf5 !important; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; }
+          .print-veredicto h3 { font-size: 14px; color: #065f46; font-weight: bold; text-transform: uppercase; }
+          .print-veredicto h2 { font-size: 32px; font-weight: 900; color: #047857; margin: 5px 0; }
+          .print-chart-container { border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 20px; height: 350px; }
+          .print-ai-report { border: 1px solid #cbd5e1; background-color: #f8fafc !important; padding: 20px; border-radius: 8px; }
+          .print-ai-title { font-size: 16px; font-weight: bold; color: #334155; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; margin-bottom: 15px; }
+          .print-footer { margin-top: 30px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+        }
+      `}} />
+
+      {/* DISEÑO DEL REPORTE PDF (Solo visible al imprimir) */}
+      <div className="hidden print:block">
+         <div className="print-header">
+            <div>
+               <div className="print-title">Decisiones de Inversión IA</div>
+               <div className="print-subtitle">Reporte Confidencial Generado el {new Date().toLocaleDateString('es-PE')}</div>
+            </div>
+            <div className="text-right">
+               <div className="font-bold text-slate-800 text-xl">{formData.nombre_idea}</div>
+               <div className="text-slate-500">Sector: {formData.sector}</div>
+            </div>
+         </div>
+
+         {res && (
+            <>
+              <div className="print-veredicto">
+                 <h3>Dictamen del Algoritmo Financiero</h3>
+                 <h2>{res.metricas.recomendacion.estado}</h2>
+                 <p className="font-medium text-emerald-800">{res.metricas.recomendacion.msg}</p>
+              </div>
+
+              <div className="print-grid">
+                 <div className="print-card">
+                    <div className="print-card-title">Score de Inversión</div>
+                    <div className="print-card-value text-indigo-700">{res.metricas.score}/100</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Inversión Total</div>
+                    <div className="print-card-value">{formData.moneda} {res.metricas.inversion_total}</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Punto Equilibrio</div>
+                    <div className="print-card-value text-indigo-700">{res.metricas.punto_equilibrio} v/m</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Riesgo (Pérdida)</div>
+                    <div className="print-card-value text-rose-600">{res.riesgo.probabilidad_perdida}%</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Recuperación (Payback)</div>
+                    <div className="print-card-value">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Ganancia Prom. Año 1</div>
+                    <div className="print-card-value text-emerald-600">{formData.moneda} {res.riesgo.ganancia_promedio_anio}</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Margen Neto</div>
+                    <div className="print-card-value">{res.base.margen_neto}%</div>
+                 </div>
+                 <div className="print-card">
+                    <div className="print-card-title">Margen de Seguridad</div>
+                    <div className="print-card-value">{res.metricas.margen_seguridad}%</div>
+                 </div>
+              </div>
+
+              <div className="print-chart-container">
+                <h3 className="font-bold text-slate-800 mb-2 text-sm">Flujo de Caja Acumulado (Multiescenario)</h3>
+                <ResponsiveContainer width="100%" height="90%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="mes" tick={{fontSize: 10, fill: '#64748b'}} />
+                    <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={45}/>
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
+                    <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} />
+                    <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base" dot={false} />
+                    <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {consejoIA && (
+                <div className="print-ai-report" style={{ pageBreakInside: 'avoid' }}>
+                   <div className="print-ai-title">🤖 Auditoría Estratégica (Inteligencia Artificial)</div>
+                   <div className="text-sm text-slate-800 leading-relaxed">
+                      <ReactMarkdown components={{
+                        h3: ({node, ...props}) => <h3 className="text-lg font-bold text-slate-900 mt-3 mb-1" {...props} />,
+                        h4: ({node, ...props}) => <h4 className="font-bold text-slate-800 mt-2" {...props} />,
+                        p: ({node, ...props}) => <p className="mb-2" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-2" {...props} />,
+                        li: ({node, ...props}) => <li {...props} />
+                      }}>
+                        {consejoIA}
+                      </ReactMarkdown>
+                   </div>
+                </div>
+              )}
+
+              <div className="print-footer">
+                 Documento generado automáticamente por Decisiones de Inversión IA. Los resultados son estimaciones basadas en los datos proporcionados y no constituyen asesoría financiera garantizada.
+              </div>
+            </>
+         )}
+      </div>
+
+      <div className="max-w-7xl mx-auto print:hidden">
+        <header className="mb-6 text-center">
           <h1 className="text-4xl font-extrabold text-indigo-700 tracking-tight">Decisiones de Inversión IA</h1>
           <p className="text-slate-500 mt-2">Simula, sensibiliza y toma decisiones financieras basadas en datos empíricos.</p>
         </header>
 
-        <div className="hidden print:block text-center mb-8 border-b pb-4">
-           <h1 className="text-3xl font-black text-slate-900 uppercase tracking-widest">Reporte Ejecutivo de Inversión</h1>
-           <p className="text-slate-500 font-bold mt-2">Proyecto: {formData.nombre_idea} | Sector: {formData.sector}</p>
-        </div>
-
-        <div className="flex justify-center mb-8 print:hidden">
+        <div className="flex justify-center mb-8">
           <div className="bg-white rounded-lg shadow-sm p-1 inline-flex border border-slate-200">
-            <button onClick={() => setActiveTab('simulador')} className={`cursor-pointer px-6 py-2 font-bold rounded-md transition-colors ${activeTab === 'simulador' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}>Nueva Simulación</button>
-            <button onClick={() => setActiveTab('ranking')} className={`cursor-pointer px-6 py-2 font-bold rounded-md transition-colors ${activeTab === 'ranking' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}>Mis Ideas (Ranking)</button>
+            <button onClick={() => setActiveTab('simulador')} className={`cursor-pointer px-6 py-2 font-bold rounded-md transition-colors ${activeTab === 'simulador' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}>Simulador</button>
+            <button onClick={() => setActiveTab('ranking')} className={`cursor-pointer px-6 py-2 font-bold rounded-md transition-colors ${activeTab === 'ranking' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}>Mis Proyectos ({historial.length})</button>
           </div>
         </div>
 
         {activeTab === 'simulador' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:block print:w-full">
-            
-            <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 print:hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-7 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
-                  <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">1. Datos y Capital</h2>
+                  <div className="flex justify-between items-center border-b pb-2 mb-4">
+                     <h2 className="text-xl font-bold text-indigo-600">1. Datos y Capital</h2>
+                     <select value={formData.moneda} onChange={e => handleSimple('moneda', e.target.value)} className="p-1 border rounded bg-slate-50 text-sm font-bold text-slate-700 outline-none">
+                        <option value="S/">Soles (S/)</option>
+                        <option value="USD">Dólares (USD)</option>
+                        <option value="EUR">Euros (€)</option>
+                        <option value="MXN">Pesos (MXN)</option>
+                     </select>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div className="md:col-span-2"><label className="block text-sm font-semibold mb-1">Nombre del Proyecto</label><input type="text" value={formData.nombre_idea} onChange={e => handleSimple('nombre_idea', e.target.value)} className="w-full p-2 border rounded bg-slate-50 focus:ring-2 ring-indigo-200 outline-none" /></div>
-                    <div><label className="block text-sm font-bold mb-1 text-emerald-700">Mi Capital Total (S/)</label><input type="number" value={formData.capital_disponible} onChange={e => handleSimple('capital_disponible', parseFloat(e.target.value))} className="w-full p-2 border-2 border-emerald-300 rounded bg-emerald-50 font-bold outline-none" /></div>
+                    <div><label className="block text-sm font-bold mb-1 text-emerald-700">Mi Capital ({formData.moneda})</label><input type="number" value={formData.capital_disponible} onChange={e => handleSimple('capital_disponible', parseFloat(e.target.value))} className="w-full p-2 border-2 border-emerald-300 rounded bg-emerald-50 font-bold outline-none" /></div>
                   </div>
                   <div><label className="block text-sm font-semibold mb-1">Sector Comercial</label><input type="text" value={formData.sector} onChange={e => handleSimple('sector', e.target.value)} className="w-full p-2 border rounded bg-slate-50 focus:ring-2 ring-indigo-200 outline-none" /></div>
                 </section>
@@ -271,28 +396,44 @@ export default function Home() {
                 <section>
                   <div className="flex justify-between items-end border-b pb-2 mb-4">
                     <h2 className="text-xl font-bold text-indigo-600">2. Inversión Requerida</h2>
-                    <span className={`font-bold px-3 py-1 rounded text-sm ${invTotal > formData.capital_disponible ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>S/ {invTotal} / S/ {formData.capital_disponible}</span>
+                    <span className={`font-bold px-3 py-1 rounded text-sm ${invTotal > formData.capital_disponible ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>Total: {formData.moneda} {invTotal}</span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                     {Object.keys(formData.inversion).map(key => (
                       <div key={key}><label className="block text-sm font-semibold mb-1 capitalize">{key}</label><input type="number" value={(formData.inversion as any)[key]} onChange={e => handleNested('inversion', key, parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                     ))}
                   </div>
+
+                  {/* NUEVO MÓDULO DE PRÉSTAMOS */}
+                  {invTotal > formData.capital_disponible && (
+                    <div className="mt-4 p-4 border border-rose-200 bg-rose-50 rounded-xl">
+                       <div className="flex items-center gap-2 mb-3">
+                          <input type="checkbox" id="prestamo" checked={formData.solicitar_prestamo} onChange={e => handleSimple('solicitar_prestamo', e.target.checked)} className="w-4 h-4 accent-rose-600 cursor-pointer" />
+                          <label htmlFor="prestamo" className="font-bold text-rose-800 text-sm cursor-pointer">Solicitar Préstamo por el capital faltante ({formData.moneda} {invTotal - formData.capital_disponible})</label>
+                       </div>
+                       {formData.solicitar_prestamo && (
+                         <div className="grid grid-cols-2 gap-4">
+                            <div><label className="block text-xs font-semibold text-rose-700 mb-1">Tasa Efectiva Anual (TEA %)</label><input type="number" step="0.1" value={formData.tea} onChange={e => handleSimple('tea', parseFloat(e.target.value))} className="w-full p-2 border border-rose-200 rounded outline-none text-sm" /></div>
+                            <div><label className="block text-xs font-semibold text-rose-700 mb-1">Plazo (Meses)</label><input type="number" value={formData.plazo_meses} onChange={e => handleSimple('plazo_meses', parseInt(e.target.value))} className="w-full p-2 border border-rose-200 rounded outline-none text-sm" /></div>
+                         </div>
+                       )}
+                    </div>
+                  )}
                 </section>
 
                 <section>
                   <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">3. Unitarios (Por Venta)</h2>
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div><label className="block text-sm font-semibold mb-1">Precio de Venta (S/)</label><input type="number" value={formData.precio_venta} onChange={e => handleSimple('precio_venta', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
-                    <div><label className="block text-sm font-semibold mb-1">Costo Directo (S/)</label><input type="number" value={formData.costo_directo} onChange={e => handleSimple('costo_directo', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
+                    <div><label className="block text-sm font-semibold mb-1">Precio de Venta ({formData.moneda})</label><input type="number" value={formData.precio_venta} onChange={e => handleSimple('precio_venta', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
+                    <div><label className="block text-sm font-semibold mb-1">Costo Directo ({formData.moneda})</label><input type="number" value={formData.costo_directo} onChange={e => handleSimple('costo_directo', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                   </div>
                 </section>
 
                 <section>
                   <h2 className="text-xl font-bold border-b pb-2 mb-4 text-indigo-600">4. Gastos e Impuestos Fijos</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     {Object.keys(formData.gastos_fijos).map(key => (
-                      <div key={key}><label className="block text-sm font-semibold mb-1 capitalize">{key.replace('_', ' ')}</label><input type="number" value={(formData.gastos_fijos as any)[key]} onChange={e => handleNested('gastos_fijos', key, parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
+                      <div key={key}><label className="block text-sm font-semibold mb-1 capitalize truncate" title={key.replace('_', ' ')}>{key.replace('_', ' ')}</label><input type="number" value={(formData.gastos_fijos as any)[key]} onChange={e => handleNested('gastos_fijos', key, parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -301,10 +442,10 @@ export default function Home() {
                       <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="w-full p-2 border rounded bg-slate-50 outline-none text-sm">
                         <option value="NRUS">Nuevo RUS (Cuota Fija)</option>
                         <option value="RER">RER (1.5% Ingresos)</option>
-                        <option value="MYPE">Régimen MYPE/General (1% cuenta)</option>
+                        <option value="MYPE">Régimen General (1% cuenta)</option>
                       </select>
                     </div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Inflación Anual Esperada (%)</label><input type="number" value={formData.inflacion_anual} onChange={e => handleSimple('inflacion_anual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
+                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Inflación Anual Esperada (%)</label><input type="number" step="0.1" value={formData.inflacion_anual} onChange={e => handleSimple('inflacion_anual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                   </div>
                 </section>
 
@@ -314,7 +455,7 @@ export default function Home() {
                     <div><label className="block text-sm font-bold mb-1 text-rose-600">Pesimista</label><input type="number" value={formData.ventas.pesimista} onChange={e => handleNested('ventas', 'pesimista', parseInt(e.target.value))} className="w-full p-2 border border-rose-200 rounded bg-slate-50 outline-none" /></div>
                     <div><label className="block text-sm font-bold mb-1 text-indigo-600">Base (Realista)</label><input type="number" value={formData.ventas.base} onChange={e => handleNested('ventas', 'base', parseInt(e.target.value))} className="w-full p-2 border border-indigo-300 rounded bg-indigo-50 outline-none" /></div>
                     <div><label className="block text-sm font-bold mb-1 text-emerald-600">Optimista</label><input type="number" value={formData.ventas.optimista} onChange={e => handleNested('ventas', 'optimista', parseInt(e.target.value))} className="w-full p-2 border border-emerald-200 rounded bg-slate-50 outline-none" /></div>
-                    <div><label className="block text-sm font-semibold mb-1">Crecimiento Mensual (%)</label><input type="number" value={formData.ventas.crecimiento_mensual} onChange={e => handleNested('ventas', 'crecimiento_mensual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
+                    <div><label className="block text-sm font-semibold mb-1">Crecim. Mensual (%)</label><input type="number" step="0.1" value={formData.ventas.crecimiento_mensual} onChange={e => handleNested('ventas', 'crecimiento_mensual', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-slate-50 outline-none" /></div>
                   </div>
                 </section>
 
@@ -324,10 +465,11 @@ export default function Home() {
               </form>
             </div>
 
-            <div className="lg:col-span-5 space-y-6 print:col-span-12 print:block print:w-full">
+            <div className="lg:col-span-5 space-y-6">
               {res ? (
                 <>
-                  <div className={`p-6 border-2 rounded-2xl shadow-md text-center print:shadow-none print:border-4 ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 border-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 border-rose-400' : 'bg-amber-50 border-amber-400'}`}>
+                  {/* DICTAMEN PRINCIPAL */}
+                  <div className={`p-6 border-2 rounded-2xl shadow-md text-center ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 border-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 border-rose-400' : 'bg-amber-50 border-amber-400'}`}>
                     <h3 className="font-extrabold text-slate-800 text-lg uppercase tracking-wide mb-2">Dictamen de Inversión</h3>
                     <div className="text-3xl font-black mb-1">{res.metricas.recomendacion.estado}</div>
                     <p className="text-sm font-medium text-slate-700">{res.metricas.recomendacion.msg}</p>
@@ -343,65 +485,75 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4">
-                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
-                       <div className="flex justify-between items-center mb-1">
-                         <p className="text-xs font-bold text-slate-600">Riesgo (Pérdida)</p>
-                         <span className="text-[10px] bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help print:hidden">?</span>
-                       </div>
-                       <p className={`text-xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                         {res.riesgo.probabilidad_perdida}%
+                  {/* GESTIÓN DEL CAPITAL Y PRÉSTAMOS */}
+                  <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                    <h3 className="font-bold text-slate-800 text-sm mb-3 ml-2">Gestión de tu Capital ({formData.moneda} {formData.capital_disponible})</h3>
+                    <div className="ml-2 space-y-2">
+                       <p className="text-sm text-slate-600 flex justify-between">
+                         <span>1. Reserva Intocable (3 meses)</span>
+                         <span className="font-bold text-slate-800">{formData.moneda} {res.metricas.reserva_emergencia}</span>
                        </p>
-                       <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20 print:hidden">
-                          Probabilidad matemática de cerrar el primer año con pérdidas de dinero, calculada evaluando los 3 escenarios juntos.
-                       </div>
-                     </div>
-                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
-                       <div className="flex justify-between items-center mb-1">
-                         <p className="text-xs font-bold text-slate-600">Payback</p>
-                         <span className="text-[10px] bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help print:hidden">?</span>
-                       </div>
-                       <p className="text-xl font-extrabold text-indigo-700">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</p>
-                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20 print:hidden">
-                          El tiempo exacto que te tomará recuperar el 100% de tu inversión operando en el escenario base realista.
-                       </div>
-                     </div>
-                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                       <p className="text-xs font-bold text-slate-600 mb-1">Margen Neto</p>
-                       <p className="text-xl font-extrabold text-slate-800">{res.base.margen_neto}%</p>
-                     </div>
-                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
-                       <div className="flex justify-between items-center mb-1">
-                         <p className="text-xs font-bold text-slate-600">Margen Seguridad</p>
-                         <span className="text-[10px] bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help print:hidden">?</span>
-                       </div>
-                       <p className="text-xl font-extrabold text-slate-800">{res.metricas.margen_seguridad}%</p>
-                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20 print:hidden">
-                          Porcentaje máximo que pueden caer tus ventas planeadas antes de que el negocio empiece a perder dinero mensual.
-                       </div>
-                     </div>
-                  </div>
-
-                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm print:shadow-none print:border-none">
-                    <h3 className="font-bold text-slate-800 mb-2 text-sm">Proyección Multi-Escenario (Caja Acumulada)</h3>
-                    <div className="h-56 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="mes" tick={{fontSize: 10}} />
-                          <YAxis tick={{fontSize: 10}} width={45}/>
-                          <Tooltip formatter={(value: any) => `S/ ${value}`} />
-                          <Legend wrapperStyle={{ fontSize: '12px' }} />
-                          <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
-                          <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={{r: 2}} />
-                          <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base (Realista)" dot={{r: 3}} activeDot={{r: 6}} />
-                          <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={{r: 2}} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                       <p className="text-sm text-slate-600 flex justify-between">
+                         <span>2. Capital Seguro para Invertir</span>
+                         <span className="font-bold text-emerald-600">{formData.moneda} {res.metricas.capital_invertible}</span>
+                       </p>
+                       <p className={`text-sm flex justify-between pt-2 border-t mt-2 ${invTotal > res.metricas.capital_invertible ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
+                         <span>3. Tu Inversión Total</span>
+                         <span>{formData.moneda} {invTotal}</span>
+                       </p>
+                       {res.metricas.prestamo.monto > 0 && (
+                         <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-xs font-bold text-amber-800 mb-1">🏦 Préstamo Bancario Activo</p>
+                            <p className="text-xs text-amber-700 flex justify-between"><span>Monto Financiado:</span> <span>{formData.moneda} {res.metricas.prestamo.monto}</span></p>
+                            <p className="text-xs text-amber-700 flex justify-between"><span>Cuota Mensual (Restada de caja):</span> <span className="font-bold">{formData.moneda} {res.metricas.prestamo.cuota_mensual}</span></p>
+                         </div>
+                       )}
                     </div>
                   </div>
 
-                  <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md print:hidden">
+                  {/* INDICADORES FINANCIEROS */}
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
+                       <div className="flex justify-between items-center mb-1">
+                         <p className="text-sm font-bold text-slate-600">Riesgo (Pérdida)</p>
+                         <span className="text-xs bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                       </div>
+                       <p className={`text-2xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                         {res.riesgo.probabilidad_perdida}%
+                       </p>
+                       <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
+                          Probabilidad de que tu proyecto cierre el **primer año completo** con saldo negativo.
+                       </div>
+                     </div>
+                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
+                       <div className="flex justify-between items-center mb-1">
+                         <p className="text-sm font-bold text-slate-600">Payback</p>
+                         <span className="text-xs bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                       </div>
+                       <p className="text-2xl font-extrabold text-indigo-700">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</p>
+                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
+                          Tiempo estimado para recuperar tu inversión inicial operando en el escenario base realista.
+                       </div>
+                     </div>
+                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                       <p className="text-sm font-bold text-slate-600 mb-1">Margen Neto</p>
+                       <p className="text-2xl font-extrabold text-slate-800">{res.base.margen_neto}%</p>
+                     </div>
+                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
+                       <div className="flex justify-between items-center mb-1">
+                         <p className="text-sm font-bold text-slate-600">Punto de Equilibrio</p>
+                         <span className="text-xs bg-slate-200 text-slate-500 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                       </div>
+                       <p className="text-2xl font-extrabold text-slate-800">{res.metricas.punto_equilibrio} <span className="text-sm font-medium">v/mes</span></p>
+                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-20">
+                          Ventas exactas necesarias al mes para no perder ni ganar dinero (cubre costos fijos, cuotas e impuestos).
+                       </div>
+                     </div>
+                  </div>
+
+                  {/* MÓDULO QUÉ PASA SI SINCRONIZADO */}
+                  <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md">
                     <h3 className="font-bold text-indigo-100 mb-4 text-sm flex items-center gap-2">
                        <span>🧪 Sensibilidad Dinámica: Ajusta y recalcula al instante</span>
                     </h3>
@@ -409,7 +561,7 @@ export default function Home() {
                        <div>
                           <div className="flex justify-between text-xs font-medium mb-2">
                              <span className="text-indigo-200">Precio de Venta Dinámico</span>
-                             <span className="text-white font-bold bg-indigo-800 px-2 py-1 rounded">S/ {formData.precio_venta.toFixed(2)}</span>
+                             <span className="text-white font-bold bg-indigo-800 px-2 py-1 rounded">{formData.moneda} {formData.precio_venta.toFixed(2)}</span>
                           </div>
                           <input type="range" 
                              min={Math.max(1, formData.costo_directo + 1)} max={Math.max(100, formData.precio_venta * 2)} step="0.5" 
@@ -422,7 +574,7 @@ export default function Home() {
                        <div>
                           <div className="flex justify-between text-xs font-medium mb-2">
                              <span className="text-indigo-200">Costo Directo Dinámico</span>
-                             <span className="text-white font-bold bg-indigo-800 px-2 py-1 rounded">S/ {formData.costo_directo.toFixed(2)}</span>
+                             <span className="text-white font-bold bg-indigo-800 px-2 py-1 rounded">{formData.moneda} {formData.costo_directo.toFixed(2)}</span>
                           </div>
                           <input type="range" 
                              min="1" max={formData.precio_venta - 0.5} step="0.5" 
@@ -435,44 +587,85 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden print:bg-white print:text-slate-800 print:shadow-none print:border print:border-slate-200 print:mt-8">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl print:hidden">🤖</div>
-                    <h3 className="font-bold text-white mb-3 text-lg relative z-10 print:text-indigo-800 border-b print:border-slate-300 print:pb-2">Auditoría Estratégica AI</h3>
+                  {/* EL GRÁFICO 3 LÍNEAS */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-2 text-sm">Proyección Multi-Escenario (Caja Acumulada)</h3>
+                    <div className="h-56 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="mes" tick={{fontSize: 10}} />
+                          <YAxis tick={{fontSize: 10}} width={45}/>
+                          <Tooltip formatter={(value: any) => `${formData.moneda} ${value}`} />
+                          <Legend wrapperStyle={{ fontSize: '12px' }} />
+                          <ReferenceLine y={0} stroke="#000" strokeWidth={1} />
+                          <Line type="monotone" dataKey="pesimista" stroke="#e11d48" strokeWidth={2} name="Pesimista" dot={false} />
+                          <Line type="monotone" dataKey="base" stroke="#4f46e5" strokeWidth={3} name="Base (Realista)" dot={false} activeDot={{r: 6}} />
+                          <Line type="monotone" dataKey="optimista" stroke="#10b981" strokeWidth={2} name="Optimista" dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* --- PANEL DEL CONSEJERO IA Y CHAT --- */}
+                  <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">🤖</div>
+                    <h3 className="font-bold text-white mb-3 text-lg relative z-10">Auditoría Estratégica AI</h3>
                     
-                    <div className="flex gap-2 mb-4 flex-wrap relative z-10 print:hidden">
+                    <div className="flex gap-2 mb-4 flex-wrap relative z-10">
                       <button onClick={() => pedirConsejo('auditor')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'auditor' ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>🧐 Riesgo & Costos</button>
                       <button onClick={() => pedirConsejo('marketing')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'marketing' ? 'bg-purple-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>🚀 Crecimiento</button>
                       <button onClick={() => pedirConsejo('operaciones')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'operaciones' ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>⚙️ Operaciones</button>
                     </div>
 
-                    {consejoIA ? (
-                      <div className="p-5 bg-slate-900/50 rounded-lg border border-slate-700 shadow-inner text-sm text-slate-300 max-h-[400px] overflow-y-auto relative z-10 print:bg-transparent print:border-none print:text-slate-800 print:max-h-full print:p-0 print:overflow-visible">
+                    {consejoIA && (
+                      <div className="p-5 bg-slate-900/50 rounded-t-lg border border-slate-700 shadow-inner text-sm text-slate-300 max-h-[400px] overflow-y-auto relative z-10">
                         {cargandoIA ? (
-                          <div className="animate-pulse flex space-x-3 items-center print:hidden">
+                          <div className="animate-pulse flex space-x-3 items-center">
                              <div className="h-4 w-4 bg-indigo-500 rounded-full"></div>
                              <p className="text-indigo-300 font-medium tracking-wide">La IA está procesando el dictamen...</p>
                           </div>
                         ) : (
                           <ReactMarkdown
                             components={{
-                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-white print:text-slate-800 mt-4 mb-2 border-b border-slate-700 print:border-slate-300 pb-1" {...props} />,
-                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-300 print:text-indigo-700 mt-3 mb-1" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="text-xl font-bold text-white mt-4 mb-2 border-b border-slate-700 pb-1" {...props} />,
+                              h4: ({node, ...props}) => <h4 className="text-lg font-bold text-indigo-300 mt-3 mb-1" {...props} />,
                               p: ({node, ...props}) => <p className="mb-2 leading-relaxed" {...props} />,
-                              strong: ({node, ...props}) => <strong className="font-bold text-white print:text-black bg-slate-800 print:bg-transparent px-1 rounded" {...props} />,
-                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-400 print:text-slate-700" {...props} />,
+                              strong: ({node, ...props}) => <strong className="font-bold text-white bg-slate-800 px-1 rounded" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-400" {...props} />,
                               li: ({node, ...props}) => <li {...props} />
                             }}
                           >
                             {consejoIA}
                           </ReactMarkdown>
                         )}
+                        
+                        {/* Historial de Chat Dinámico */}
+                        {chatHistory.map((msg, i) => (
+                           <div key={i} className={`mt-4 p-3 rounded-lg ${msg.role === 'user' ? 'bg-indigo-900/50 border border-indigo-700/50 text-indigo-100 ml-8' : 'bg-slate-800 border border-slate-700 text-slate-300 mr-8'}`}>
+                              <p className="text-xs font-bold mb-1 opacity-50">{msg.role === 'user' ? 'Tú' : 'IA Consejero'}</p>
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                           </div>
+                        ))}
+                        {cargandoChat && (
+                           <div className="mt-4 p-3 rounded-lg bg-slate-800 border border-slate-700 mr-8 animate-pulse">
+                              <div className="h-2 bg-slate-600 rounded w-1/4 mb-2"></div>
+                              <div className="h-2 bg-slate-600 rounded w-1/2"></div>
+                           </div>
+                        )}
                       </div>
-                    ) : (
-                      <p className="text-sm text-slate-400 print:hidden relative z-10">Selecciona un rol arriba para que la IA emita su reporte escrito aquí. Te recomendamos incluirlo antes de imprimir el PDF.</p>
+                    )}
+                    
+                    {/* Input de Chat (Solo visible si ya se pidió consejo) */}
+                    {consejoIA && (
+                       <form onSubmit={enviarMensajeChat} className="relative z-10 border border-t-0 border-slate-700 rounded-b-lg overflow-hidden flex">
+                          <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Pregúntale al asesor: ¿Qué pasa si contrato un repartidor?" className="flex-1 bg-slate-900 p-3 text-sm text-white outline-none placeholder:text-slate-500" disabled={cargandoChat} />
+                          <button type="submit" disabled={cargandoChat || !chatInput.trim()} className="bg-indigo-600 hover:bg-indigo-500 px-4 font-bold text-white disabled:opacity-50 cursor-pointer transition-colors">Enviar</button>
+                       </form>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button onClick={exportarPDF} className="cursor-pointer w-full py-4 bg-rose-600 hover:bg-rose-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors">
                       📄 Exportar PDF (Reporte Ejecutivo)
                     </button>
@@ -482,10 +675,10 @@ export default function Home() {
                   </div>
                 </>
               ) : (
-                <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white p-8 print:hidden">
+                <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white p-8">
                   <div className="text-6xl mb-4 opacity-50">📈</div>
                   <h3 className="text-xl font-bold text-slate-600 mb-2">Plataforma de Decisión</h3>
-                  <p className="text-center text-sm">Ejecuta la simulación para obtener el Score de Inversión, el análisis de riesgo y el dictamen de viabilidad.</p>
+                  <p className="text-center text-sm">Ejecuta la simulación para obtener el Score, análisis de riesgo y el chatbot financiero.</p>
                 </div>
               )}
             </div>
@@ -494,9 +687,9 @@ export default function Home() {
 
         {/* --- PESTAÑA 2: RANKING Y COMPARACIÓN --- */}
         {activeTab === 'ranking' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh] print:hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
             <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-              <h2 className="text-xl font-bold text-slate-800">Ranking de Mis Ideas</h2>
+              <h2 className="text-xl font-bold text-slate-800">Ranking de Mis Proyectos</h2>
               <div className="flex flex-wrap items-center gap-2 md:gap-4">
                 {selectedToCompare.length > 0 && (
                   <>
@@ -516,13 +709,12 @@ export default function Home() {
                     <th className="p-3 md:p-4 border-b text-center">
                       <input type="checkbox" className="w-4 h-4 text-indigo-600 cursor-pointer" onChange={toggleAll} checked={historial.length > 0 && selectedToCompare.length === historial.length} />
                     </th>
-                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('fecha')}>Fecha/Hora <SortIcon columnKey="fecha" /></th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('fecha')}>Fecha <SortIcon columnKey="fecha" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('proyecto')}>Proyecto <SortIcon columnKey="proyecto" /></th>
-                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('sector')}>Sector <SortIcon columnKey="sector" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('score')}>Score <SortIcon columnKey="score" /></th>
                     <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('inversion')}>Inversión <SortIcon columnKey="inversion" /></th>
-                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('riesgo')}>Riesgo <SortIcon columnKey="riesgo" /></th>
-                    <th className="p-3 md:p-4 border-b text-center">Exportar</th>
+                    <th className="p-3 md:p-4 border-b cursor-pointer hover:bg-slate-200 group transition-colors" onClick={() => requestSort('ganancia')}>Ganancia <SortIcon columnKey="ganancia" /></th>
+                    <th className="p-3 md:p-4 border-b text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -539,22 +731,24 @@ export default function Home() {
                           </td>
                           <td className="p-3 md:p-4 text-xs font-medium text-slate-500 whitespace-nowrap">{formatFecha(item.created_at)}</td>
                           <td className="p-3 md:p-4 font-bold text-slate-800">{item.project_name}</td>
-                          <td className="p-3 md:p-4 text-sm text-slate-600">{item.inputs?.sector || "N/A"}</td>
                           <td className="p-3 md:p-4">
-                            <span className={`px-2 py-1 rounded text-xs font-bold ${score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 45 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {score}/100
-                            </span>
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 45 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{score}/100</span>
                           </td>
-                          <td className="p-3 md:p-4 text-sm font-medium">S/ {resBD.metricas.inversion_total}</td>
-                          <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-slate-600'}`}>{resBD.riesgo?.probabilidad_perdida}%</td>
+                          <td className="p-3 md:p-4 text-sm font-medium">{item.inputs?.moneda || "S/"} {resBD.metricas.inversion_total}</td>
+                          <td className={`p-3 md:p-4 text-sm font-bold ${resBD.riesgo?.ganancia_promedio_anio >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.inputs?.moneda || "S/"} {resBD.riesgo?.ganancia_promedio_anio}</td>
                           <td className="p-3 md:p-4 text-center">
-                             <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:underline text-xs bg-emerald-50 px-3 py-1 rounded-md">↓ Excel</button>
+                             <div className="flex justify-center gap-2">
+                               {/* NUEVO BOTÓN EDITAR */}
+                               <button onClick={() => editarSimulacion(item)} className="cursor-pointer text-indigo-600 font-bold hover:bg-indigo-100 text-xs bg-indigo-50 px-2 py-1 rounded-md transition-colors" title="Cargar en el simulador">✏️ Editar</button>
+                               <button onClick={() => exportarAExcel(item.project_name, resBD)} className="cursor-pointer text-emerald-600 font-bold hover:bg-emerald-100 text-xs bg-emerald-50 px-2 py-1 rounded-md transition-colors" title="Exportar CSV">📊 CSV</button>
+                               <button onClick={() => eliminarSimulacion(item.id)} className="cursor-pointer text-rose-600 hover:bg-rose-100 text-xs bg-rose-50 px-2 py-1 rounded-md transition-colors" title="Eliminar">🗑️</button>
+                             </div>
                           </td>
                         </tr>
                       );
                     })
                   ) : (
-                    <tr><td colSpan={8} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados en tu portafolio.</td></tr>
+                    <tr><td colSpan={7} className="p-8 text-center text-slate-500">Aún no hay proyectos guardados.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -562,69 +756,27 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- MODAL DE COMPARACIÓN --- */}
+        {/* MODAL COMPARATIVA */}
         {showCompareModal && (
-          <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm print:hidden"
-            onClick={(e) => { if (e.target === e.currentTarget) setShowCompareModal(false); }}
-          >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowCompareModal(false); }}>
             <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                 <h2 className="text-2xl font-black text-indigo-900">Comparativa Decisional</h2>
-                <button onClick={() => setShowCompareModal(false)} className="cursor-pointer px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">✕ Cerrar (ESC)</button>
+                <button onClick={() => setShowCompareModal(false)} className="cursor-pointer px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">✕ Cerrar</button>
               </div>
-              
               <div className="p-6 overflow-x-auto flex-1 bg-slate-100/50">
                 <div className="flex gap-6 min-w-max">
                   {selectedToCompare.map(item => {
                     const r = item.financial_results;
-                    const ganancia = r.riesgo?.ganancia_promedio_anio || 0;
-                    const score = r.metricas?.score || 0;
-                    const roi = r.metricas?.roi || 'N/A';
-                    const payback = typeof r.base?.mes_recuperacion === 'number' ? `Mes ${r.base.mes_recuperacion}` : '+1 Año';
-
                     return (
                       <div key={item.id} className="w-80 bg-white border border-slate-200 rounded-2xl p-6 shadow-md flex flex-col relative hover:shadow-xl transition-shadow">
                          <button onClick={() => toggleCompare(item)} className="cursor-pointer absolute top-4 right-4 text-slate-400 hover:text-rose-500 bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center">✕</button>
                          <h3 className="font-bold text-xl text-slate-800 mb-1 pr-8 leading-tight">{item.project_name}</h3>
-                         <p className="text-xs text-slate-500 mb-3">{formatFecha(item.created_at)}</p>
-                         
-                         <div className={`mb-5 inline-block px-3 py-1 rounded-full text-xs font-bold border ${score >= 75 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : score >= 45 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
-                           Score: {score}/100
-                         </div>
-                         
-                         <div className="space-y-4 flex-1 text-sm">
-                            <div className="flex justify-between border-b border-slate-100 pb-2">
-                               <span className="text-slate-500">Inversión Requerida:</span>
-                               <span className="font-black text-slate-800">S/ {r.metricas.inversion_total}</span>
-                            </div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2">
-                               <span className="text-slate-500">Rentabilidad (ROI):</span>
-                               <span className="font-black text-indigo-600">{roi}%</span>
-                            </div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2">
-                               <span className="text-slate-500">Payback (Recuperación):</span>
-                               <span className="font-bold text-slate-800">{payback}</span>
-                            </div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2">
-                               <span className="text-slate-500">Punto de Equilibrio:</span>
-                               <span className="font-bold text-slate-800">{r.metricas.punto_equilibrio} v/mes</span>
-                            </div>
-                            <div className="flex justify-between border-b border-slate-100 pb-2">
-                               <span className="text-slate-500">Riesgo (Pérdida):</span>
-                               <span className={`font-black ${r.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>{r.riesgo.probabilidad_perdida}%</span>
-                            </div>
-                            <div className="flex justify-between pt-1">
-                               <span className="text-slate-500 font-medium">Ganancia Año 1:</span>
-                               <span className={`font-black text-lg ${ganancia >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>S/ {ganancia}</span>
-                            </div>
-                         </div>
-                         
-                         <div className="mt-6 pt-4 border-t border-slate-100">
-                           <p className="text-xs font-bold text-center text-slate-400 uppercase tracking-widest mb-1">Veredicto</p>
-                           <p className={`text-center font-bold text-sm ${r.metricas?.recomendacion?.estado.includes("INVERTIR") && !r.metricas?.recomendacion?.estado.includes("NO") ? 'text-emerald-600' : r.metricas?.recomendacion?.estado.includes("NO") ? 'text-rose-600' : 'text-amber-600'}`}>
-                             {r.metricas?.recomendacion?.estado || 'Analizar'}
-                           </p>
+                         <div className="space-y-4 flex-1 text-sm mt-4">
+                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">Inversión:</span><span className="font-black text-slate-800">{item.inputs?.moneda} {r.metricas.inversion_total}</span></div>
+                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">ROI:</span><span className="font-black text-indigo-600">{r.metricas?.roi || 0}%</span></div>
+                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">Punto Eq.:</span><span className="font-bold text-slate-800">{r.metricas.punto_equilibrio} v/m</span></div>
+                            <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">Riesgo:</span><span className={`font-black ${r.riesgo.probabilidad_perdida > 30 ? 'text-rose-600' : 'text-emerald-600'}`}>{r.riesgo.probabilidad_perdida}%</span></div>
                          </div>
                       </div>
                     )
@@ -634,7 +786,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
       </div>
     </main>
   );
