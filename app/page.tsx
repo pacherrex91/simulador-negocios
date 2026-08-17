@@ -4,6 +4,16 @@ import { supabase } from "./supabase";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
+// --- COMPONENTE TOOLTIP REUTILIZABLE ---
+const InfoTooltip = ({ text }: { text: string }) => (
+  <div className="relative group inline-flex items-center justify-center ml-2 align-middle print:hidden">
+    <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 dark:text-indigo-400 rounded-full w-4 h-4 flex items-center justify-center cursor-help border border-indigo-200 dark:border-indigo-800 transition-colors group-hover:bg-indigo-500 group-hover:text-white">i</span>
+    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-56 p-2.5 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg shadow-xl z-[100] text-center font-normal leading-relaxed before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800 dark:before:border-t-slate-700 pointer-events-none">
+      {text}
+    </div>
+  </div>
+);
+
 // --- 1. CATÁLOGO DE 50 PLANTILLAS (SaaS) ESTANDARIZADO ---
 const baseFinanciamiento = { financiamiento_monto: 0, financiamiento_tasa_mensual: 0, financiamiento_plazo: 12, solicitar_prestamo: false };
 
@@ -602,7 +612,10 @@ export default function Home() {
               <form onSubmit={handleSubmit} className="space-y-8">
                 <section>
                   <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
-                     <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400">1. Datos y Capital</h2>
+                     <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
+                        1. Datos y Capital
+                        <InfoTooltip text="Información básica de tu proyecto y la moneda en la que vas a trabajar." />
+                     </h2>
                      <select value={formData.moneda} onChange={e => handleSimple('moneda', e.target.value)} className="cursor-pointer p-1 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none">
                         <option value="S/">Soles (S/)</option>
                         <option value="USD">Dólares (USD)</option>
@@ -612,14 +625,23 @@ export default function Home() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div className="md:col-span-2"><label className="block text-sm font-semibold mb-1">Nombre del Proyecto</label><input type="text" value={formData.nombre_idea} onChange={e => handleSimple('nombre_idea', e.target.value)} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
-                    <div><label className="block text-sm font-bold mb-1 text-emerald-700 dark:text-emerald-400">Mi Capital ({formData.moneda})</label><input type="number" value={formData.capital_disponible} onChange={e => handleSimple('capital_disponible', parseFloat(e.target.value))} className="w-full p-2 border-2 border-emerald-300 dark:border-emerald-600 rounded bg-emerald-50 dark:bg-emerald-900/20 font-bold outline-none" /></div>
+                    <div>
+                       <label className="flex items-center text-sm font-bold mb-1 text-emerald-700 dark:text-emerald-400">
+                          Mi Capital ({formData.moneda})
+                          <InfoTooltip text="El dinero total (ahorros o capital inicial) que tienes listo para este negocio." />
+                       </label>
+                       <input type="number" value={formData.capital_disponible} onChange={e => handleSimple('capital_disponible', parseFloat(e.target.value))} className="w-full p-2 border-2 border-emerald-300 dark:border-emerald-600 rounded bg-emerald-50 dark:bg-emerald-900/20 font-bold outline-none" />
+                    </div>
                   </div>
                   <div><label className="block text-sm font-semibold mb-1">Sector Comercial</label><input type="text" value={formData.sector} onChange={e => handleSimple('sector', e.target.value)} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
                 </section>
                 
                 <section>
                   <div className="flex justify-between items-end border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
-                    <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400">2. Inversión Requerida</h2>
+                    <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
+                       2. Inversión Requerida
+                       <InfoTooltip text="Gastos de una sola vez ANTES de abrir el negocio (compras, remodelaciones, licencias)." />
+                    </h2>
                     <span className={`font-bold px-3 py-1 rounded text-sm ${invTotal > formData.capital_disponible ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}`}>Total: {formData.moneda} {invTotal}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
@@ -645,7 +667,10 @@ export default function Home() {
                 </section>
 
                 <section>
-                  <h2 className="text-xl font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 text-indigo-600 dark:text-indigo-400">3. Unitarios (Por Venta)</h2>
+                  <h2 className="text-xl font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 text-indigo-600 dark:text-indigo-400 flex items-center">
+                     3. Unitarios (Por Venta)
+                     <InfoTooltip text="Cuánto cobras al cliente y cuánto dinero exacto te cuesta hacer UN solo producto o brindar UN servicio." />
+                  </h2>
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div><label className="block text-sm font-semibold mb-1">Precio de Venta ({formData.moneda})</label><input type="number" value={formData.precio_venta} onChange={e => handleSimple('precio_venta', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
                     <div><label className="block text-sm font-semibold mb-1">Costo Directo ({formData.moneda})</label><input type="number" value={formData.costo_directo} onChange={e => handleSimple('costo_directo', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
@@ -653,7 +678,10 @@ export default function Home() {
                 </section>
 
                 <section>
-                  <h2 className="text-xl font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 text-indigo-600 dark:text-indigo-400">4. Gastos e Impuestos Fijos</h2>
+                  <h2 className="text-xl font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 text-indigo-600 dark:text-indigo-400 flex items-center">
+                     4. Gastos e Impuestos Fijos
+                     <InfoTooltip text="Pagos mensuales obligatorios que tendrás que asumir vendas o no vendas nada." />
+                  </h2>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     {Object.keys(formData.gastos_fijos).map(key => (
                       <div key={key}><label className="block text-sm font-semibold mb-1 capitalize truncate" title={key.replace('_', ' ')}>{key.replace('_', ' ')}</label><input type="number" value={(formData.gastos_fijos as any)[key]} onChange={e => handleNested('gastos_fijos', key, parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
@@ -661,24 +689,42 @@ export default function Home() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Régimen Tributario</label>
+                      <label className="flex items-center text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                         Régimen Tributario
+                         <InfoTooltip text="Define la cantidad de impuestos que pagarás al Estado. Afecta directamente tu caja mensual." />
+                      </label>
                       <select value={formData.regimen_tributario} onChange={e => handleSimple('regimen_tributario', e.target.value)} className="cursor-pointer w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none text-sm">
                         <option value="NRUS">Nuevo RUS (Cuota Fija)</option>
                         <option value="RER">RER (1.5% Ingresos)</option>
                         <option value="MYPE">Régimen General (1% cuenta)</option>
                       </select>
                     </div>
-                    <div><label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Inflación Anual Esperada (%)</label><input type="number" step="0.1" value={formData.inflacion_anual} onChange={e => handleSimple('inflacion_anual', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
+                    <div>
+                       <label className="flex items-center text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Inflación Anual Esperada (%)
+                          <InfoTooltip text="Tasa estimada en la que subirán tus gastos fijos a lo largo del año." />
+                       </label>
+                       <input type="number" step="0.1" value={formData.inflacion_anual} onChange={e => handleSimple('inflacion_anual', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" />
+                    </div>
                   </div>
                 </section>
 
                 <section>
-                  <h2 className="text-xl font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 text-indigo-600 dark:text-indigo-400">5. Ventas Mensuales Estimadas</h2>
+                  <h2 className="text-xl font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 text-indigo-600 dark:text-indigo-400 flex items-center">
+                     5. Ventas Mensuales Estimadas
+                     <InfoTooltip text="Cuántas unidades de tu producto o servicio proyectas vender en tu primer mes." />
+                  </h2>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div><label className="block text-sm font-bold mb-1 text-rose-600 dark:text-rose-400">Pesimista</label><input type="number" value={formData.ventas.pesimista} onChange={e => handleNested('ventas', 'pesimista', parseInt(e.target.value))} className="w-full p-2 border border-rose-200 dark:border-rose-800 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
                     <div><label className="block text-sm font-bold mb-1 text-indigo-600 dark:text-indigo-400">Base (Realista)</label><input type="number" value={formData.ventas.base} onChange={e => handleNested('ventas', 'base', parseInt(e.target.value))} className="w-full p-2 border border-indigo-300 dark:border-indigo-700 rounded bg-indigo-50 dark:bg-indigo-900/20 outline-none" /></div>
                     <div><label className="block text-sm font-bold mb-1 text-emerald-600 dark:text-emerald-400">Optimista</label><input type="number" value={formData.ventas.optimista} onChange={e => handleNested('ventas', 'optimista', parseInt(e.target.value))} className="w-full p-2 border border-emerald-200 dark:border-emerald-800 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
-                    <div><label className="block text-sm font-semibold mb-1">Crecim. Mensual (%)</label><input type="number" step="0.1" value={formData.ventas.crecimiento_mensual} onChange={e => handleNested('ventas', 'crecimiento_mensual', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" /></div>
+                    <div>
+                       <label className="flex items-center text-sm font-semibold mb-1">
+                          Crecim. Mensual (%)
+                          <InfoTooltip text="Porcentaje en el que esperas que tus ventas se incrementen mes a mes de forma compuesta." />
+                       </label>
+                       <input type="number" step="0.1" value={formData.ventas.crecimiento_mensual} onChange={e => handleNested('ventas', 'crecimiento_mensual', parseFloat(e.target.value))} className="w-full p-2 border dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-700 outline-none" />
+                    </div>
                   </div>
                 </section>
 
@@ -706,7 +752,10 @@ export default function Home() {
 
                   {/* DICTAMEN PRINCIPAL */}
                   <div className={`p-6 border-2 rounded-2xl shadow-md text-center ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-400 dark:border-emerald-600' : res.metricas.recomendacion.estado.includes("NO") ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-400 dark:border-rose-600' : 'bg-amber-50 dark:bg-amber-900/10 border-amber-400 dark:border-amber-600'}`}>
-                    <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-lg uppercase tracking-wide mb-2">Dictamen de Inversión</h3>
+                    <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-lg uppercase tracking-wide mb-2 flex items-center justify-center">
+                       Dictamen de Inversión
+                       <InfoTooltip text="Evaluación algorítmica combinando el riesgo, retorno sobre inversión (ROI) y solvencia de capital." />
+                    </h3>
                     <div className={`text-3xl font-black mb-1 ${res.metricas.recomendacion.estado.includes("INVERTIR") && !res.metricas.recomendacion.estado.includes("NO") ? 'text-emerald-600 dark:text-emerald-400' : res.metricas.recomendacion.estado.includes("NO") ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>{res.metricas.recomendacion.estado}</div>
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{res.metricas.recomendacion.msg}</p>
                     <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-slate-700/50 flex justify-around">
@@ -724,7 +773,10 @@ export default function Home() {
                   {/* NUEVO MÓDULO DE PRESENCIA Y TIEMPO (LA MÉTRICA DE "ESCLAVITUD") */}
                   {res.metricas.dedicacion && (
                     <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-sm text-center">
-                       <h3 className="font-bold text-indigo-800 dark:text-indigo-400 text-sm mb-2 uppercase tracking-wide">Nivel de Esclavitud & Tiempo ⏱️</h3>
+                       <h3 className="font-bold text-indigo-800 dark:text-indigo-400 text-sm mb-2 uppercase tracking-wide flex items-center justify-center">
+                          Nivel de Esclavitud & Tiempo ⏱️
+                          <InfoTooltip text="Estimación de las horas de trabajo físico e involucramiento personal que exige este tipo de industria." />
+                       </h3>
                        <p className="text-xs text-indigo-600 dark:text-indigo-300 mb-4 px-4">Calculado según la naturaleza de la industria y tu plan de sueldos.</p>
                        <div className="flex justify-around items-center">
                           <div>
@@ -741,9 +793,12 @@ export default function Home() {
                   )}
 
                   {/* GESTIÓN DEL CAPITAL Y PRÉSTAMOS */}
-                  <div className="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-3 ml-2">Gestión de tu Capital ({formData.moneda} {formData.capital_disponible})</h3>
+                  <div className="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm relative">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 rounded-l-xl"></div>
+                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-3 ml-2 flex items-center">
+                       Gestión de tu Capital ({formData.moneda} {formData.capital_disponible})
+                       <InfoTooltip text="Estructuración de tu presupuesto. Separa automáticamente un fondo de emergencia para no quebrar si las ventas tardan." />
+                    </h3>
                     <div className="ml-2 space-y-2">
                        <p className="text-sm text-slate-600 dark:text-slate-400 flex justify-between">
                          <span>1. Reserva Intocable (3 meses)</span>
@@ -771,46 +826,47 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-4">
                      <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
-                         <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Riesgo (Pérdida)</p>
-                         <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                         <p className="text-sm font-bold text-slate-600 dark:text-slate-400 flex items-center">
+                            Riesgo (Pérdida)
+                            <InfoTooltip text="Probabilidad de que tu proyecto cierre el primer año completo con saldo de caja negativo." />
+                         </p>
                        </div>
                        <p className={`text-2xl font-extrabold ${res.riesgo.probabilidad_perdida > 30 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                          {res.riesgo.probabilidad_perdida}%
                        </p>
-                       <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg shadow-xl z-20">
-                          Probabilidad de que tu proyecto cierre el **primer año completo** con saldo negativo.
-                       </div>
                      </div>
                      <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
-                         <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Payback</p>
-                         <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                         <p className="text-sm font-bold text-slate-600 dark:text-slate-400 flex items-center">
+                            Payback
+                            <InfoTooltip text="El tiempo estimado para recuperar tu inversión inicial operando en el escenario realista." />
+                         </p>
                        </div>
                        <p className="text-2xl font-extrabold text-indigo-700 dark:text-indigo-400">{typeof res.base.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+1 Año'}</p>
-                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg shadow-xl z-20">
-                          Tiempo estimado para recuperar tu inversión inicial operando en el escenario base realista.
-                       </div>
                      </div>
                      <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-                       <p className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-1">Margen Neto</p>
+                       <p className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center">
+                          Margen Neto
+                          <InfoTooltip text="Porcentaje de ganancia pura y dura que te queda de las ventas, tras pagar absolutamente todo." />
+                       </p>
                        <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{res.base.margen_neto}%</p>
                      </div>
                      <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl relative group">
                        <div className="flex justify-between items-center mb-1">
-                         <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Punto de Equilibrio</p>
-                         <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-full w-4 h-4 flex items-center justify-center cursor-help">?</span>
+                         <p className="text-sm font-bold text-slate-600 dark:text-slate-400 flex items-center">
+                            Punto de Equilibrio
+                            <InfoTooltip text="Ventas exactas necesarias al mes para quedar en 'cero'. A partir de aquí recién empiezas a ganar." />
+                         </p>
                        </div>
                        <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{res.metricas.punto_equilibrio} <span className="text-sm font-medium">v/mes</span></p>
-                       <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-48 p-3 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg shadow-xl z-20">
-                          Ventas exactas necesarias al mes para no perder ni ganar dinero (cubre costos fijos, cuotas e impuestos).
-                       </div>
                      </div>
                   </div>
 
                   {/* MÓDULO QUÉ PASA SI SINCRONIZADO BIDIRECCIONAL */}
                   <div className="p-5 bg-indigo-900 text-white rounded-xl shadow-md">
                     <h3 className="font-bold text-indigo-100 mb-4 text-sm flex items-center gap-2">
-                       <span>🧪 Sensibilidad Dinámica: Ajusta y recalcula al instante</span>
+                       <span>🧪 Sensibilidad Dinámica: Ajusta y recalcula</span>
+                       <InfoTooltip text="Mueve los deslizadores de precio y costo para simular qué pasaría en el gráfico al instante." />
                     </h3>
                     <div className="space-y-5">
                        <div>
@@ -844,7 +900,10 @@ export default function Home() {
 
                   {/* EL GRÁFICO 3 LÍNEAS CON PUNTO DE EQUILIBRIO VISUAL */}
                   <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-                    <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-2 text-sm">Proyección Multi-Escenario (Caja Acumulada)</h3>
+                    <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-2 text-sm flex items-center">
+                       Proyección Multi-Escenario (Caja Acumulada)
+                       <InfoTooltip text="Evolución de tu dinero mes a mes. Si la línea cae debajo de 0 (roja), significa que te quedaste sin plata en la vida real." />
+                    </h3>
                     <div className="h-56 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -868,7 +927,10 @@ export default function Home() {
                   {/* --- PANEL DEL CONSEJERO IA Y CHAT DINÁMICO --- */}
                   <div className="p-5 bg-slate-800 text-slate-100 rounded-xl shadow-lg relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">🤖</div>
-                    <h3 className="font-bold text-white mb-3 text-lg relative z-10">Auditoría Estratégica AI</h3>
+                    <h3 className="font-bold text-white mb-3 text-lg relative z-10 flex items-center">
+                       Auditoría Estratégica AI
+                       <InfoTooltip text="La IA de Google Gemini analiza tus datos y te da consejos operativos, de marketing y control de riesgos." />
+                    </h3>
                     
                     <div className="flex gap-2 mb-4 flex-wrap relative z-10">
                       <button onClick={() => pedirConsejo('auditor')} className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeRol === 'auditor' ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>🧐 Riesgo & Costos</button>
