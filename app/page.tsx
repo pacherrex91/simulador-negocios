@@ -349,7 +349,9 @@ export default function Home() {
 
   useEffect(() => { if (activeTab === 'ranking') cargarHistorial(); }, [activeTab]);
 
-  const invTotal = formData.inversion ? Object.values(formData.inversion).reduce((a: any, b: any) => a + b, 0) : 0;
+  const invTotal: number = formData?.inversion 
+    ? Object.values(formData.inversion).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0) as number
+    : 0;
 
   const ejecutarSimulacion = async () => {
     setLoading(true);
