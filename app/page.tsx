@@ -184,6 +184,16 @@ export default function Home() {
   const [proyectosSeleccionadosIds, setProyectosSeleccionadosIds] = useState<string[]>([]);
   const [comparadorAbierto, setComparadorAbierto] = useState(false);
   const [rankingAbierto, setRankingAbierto] = useState(false);
+
+  // --- RECÁLCULO SEGURO CON MOTOR V3.4 ---
+  const [recalculandoId, setRecalculandoId] = useState<string | null>(null);
+  const [guardandoRecalculo, setGuardandoRecalculo] = useState(false);
+  const [filtroSaneamiento, setFiltroSaneamiento] = useState<'todos' | 'v34' | 'listos' | 'incompletos'>('todos');
+  const [recalculoPreview, setRecalculoPreview] = useState<{
+    proyecto: ProyectoGuardado;
+    resultado: any;
+    inputsNormalizados: any;
+  } | null>(null);
   
   const [formData, setFormData] = useState<any>({
     nombre_idea: "", sector: "", moneda: "S/", capital_disponible: 25000,
@@ -337,6 +347,8 @@ export default function Home() {
     setActiveTab('simulador');
     setMensajeProyecto('');
     setConsejoIA('');
+    setRecalculoPreview(null);
+    setRecalculandoId(null);
   };
 
   const construirInputsGuardados = () => ({
@@ -442,6 +454,341 @@ export default function Home() {
     ].filter((x) => x.monto > 0);
   };
 
+  const normalizarInputsParaV34 = (proyecto: ProyectoGuardado) => {
+    const inputs = proyecto.inputs || {};
+    const ventas = inputs.ventas || {};
+
+    return {
+      ...inputs,
+      nombre_idea: inputs.nombre_idea ?? proyecto.project_name ?? '',
+      sector: inputs.sector ?? '',
+      moneda: inputs.moneda ?? 'S/',
+      capital_disponible: Number(inputs.capital_disponible ?? 0),
+      inversion_dinamica: convertirInversionLegacy(inputs),
+      gastos_dinamicos: convertirGastosLegacy(inputs),
+      precio_venta: Number(inputs.precio_venta ?? 0),
+      costo_directo: Number(inputs.costo_directo ?? 0),
+      ventas: {
+        pesimista: Number(ventas.pesimista ?? 0),
+        base: Number(ventas.base ?? 0),
+        optimista: Number(ventas.optimista ?? 0),
+        crecimiento_mensual: Number(ventas.crecimiento_mensual ?? 0),
+      },
+      regimen_tributario: inputs.regimen_tributario ?? 'NRUS',
+      inflacion_anual: Number(inputs.inflacion_anual ?? 3),
+      tasa_descuento: Number(inputs.tasa_descuento ?? 12),
+      meses_reserva: Number(inputs.meses_reserva ?? 3),
+      estacionalidad: Array.isArray(inputs.estacionalidad)
+        ? [...inputs.estacionalidad, ...Array(12).fill(0)].slice(0, 12)
+        : Array(12).fill(0),
+      solicitar_prestamo: Boolean(
+        inputs.solicitar_prestamo ||
+        Number(inputs.financiamiento_monto || 0) > 0
+      ),
+      financiamiento_monto: Number(inputs.financiamiento_monto ?? 0),
+      financiamiento_tasa_mensual: Number(inputs.financiamiento_tasa_mensual ?? 0),
+      financiamiento_plazo: Number(inputs.financiamiento_plazo ?? 24),
+      _frontend_schema_version: 2,
+      _motor_version: '3.4',
+    };
+  };
+
+  const evaluarRecalculoV34 = (proyecto: ProyectoGuardado) => {
+    const payload = normalizarInputsParaV34(proyecto);
+    const faltantes: string[] = [];
+
+    if (payload.precio_venta <= 0) faltantes.push('precio de venta');
+    if (payload.costo_directo < 0) faltantes.push('costo directo');
+    if (payload.ventas.base <= 0) faltantes.push('ventas base');
+    if (payload.ventas.pesimista < 0) faltantes.push('ventas pesimistas');
+    if (payload.ventas.optimista < payload.ventas.base) faltantes.push('ventas optimistas');
+    if (payload.ventas.base < payload.ventas.pesimista) faltantes.push('orden de escenarios de ventas');
+
+    return {
+      listo: faltantes.length === 0,
+      faltantes,
+      payload,
+    };
+  };
+
+  const obtenerEstadoSaneamiento = (proyecto: ProyectoGuardado) => {
+    const evaluacion = evaluarRecalculoV34(proyecto);
+    const metaRecalculo = proyecto.financial_results?._recalculo_meta;
+    const motorInputs = String(proyecto.inputs?._motor_version || '').trim();
+
+    const yaV34 =
+      motorInputs === '3.4' ||
+      metaRecalculo?.motor_nuevo === '3.4';
+
+    if (yaV34) {
+      return {
+        codigo: 'v34' as const,
+        etiqueta: 'V3.4 ACTUALIZADO',
+        faltantes: [] as string[],
+        evaluacion,
+      };
+    }
+
+    if (evaluacion.listo) {
+      return {
+        codigo: 'listo' as const,
+        etiqueta: 'LISTO PARA RECALCULAR',
+        faltantes: [] as string[],
+        evaluacion,
+      };
+    }
+
+    return {
+      codigo: 'incompleto' as const,
+      etiqueta: 'REQUIERE COMPLETAR',
+      faltantes: evaluacion.faltantes,
+      evaluacion,
+    };
+  };
+
+  const resumenSaneamiento = proyectos.reduce(
+    (acc, proyecto) => {
+      const estado = obtenerEstadoSaneamiento(proyecto);
+      acc.total += 1;
+      if (estado.codigo === 'v34') acc.v34 += 1;
+      if (estado.codigo === 'listo') acc.listos += 1;
+      if (estado.codigo === 'incompleto') acc.incompletos += 1;
+      return acc;
+    },
+    { total: 0, v34: 0, listos: 0, incompletos: 0 }
+  );
+
+  const proyectosSaneamiento = proyectos.filter((proyecto) => {
+    if (filtroSaneamiento === 'todos') return true;
+    const codigoEsperado =
+      filtroSaneamiento === 'v34'
+        ? 'v34'
+        : filtroSaneamiento === 'listos'
+          ? 'listo'
+          : 'incompleto';
+    return obtenerEstadoSaneamiento(proyecto).codigo === codigoEsperado;
+  });
+
+  const obtenerMetricasResultado = (financial: any, moneda = 'S/') => {
+    const metricas = financial?.metricas || {};
+    const proyectoMetricas = metricas.proyecto || financial?.proyecto || {};
+
+    return {
+      inversion: Number(metricas.inversion_total ?? proyectoMetricas.inversion_inicial ?? 0),
+      van: Number(metricas.van ?? proyectoMetricas.van ?? 0),
+      tir: Number(metricas.tir ?? proyectoMetricas.tir ?? 0),
+      roi: Number(metricas.roi ?? proyectoMetricas.roi ?? 0),
+      bc: Number(metricas.b_c ?? proyectoMetricas.b_c ?? 0),
+      payback:
+        metricas.payback_meses ??
+        proyectoMetricas.payback_meses ??
+        financial?.base?.payback_meses ??
+        null,
+      liquidez: String(metricas.estado_liquidez ?? 'Sin dato'),
+      riesgo:
+        financial?.riesgo?.probabilidad_perdida ??
+        metricas.probabilidad_perdida ??
+        null,
+      score: Number(metricas.score ?? 0),
+      recomendacion:
+        metricas.recomendacion?.estado ??
+        metricas.recomendacion ??
+        'Sin dictamen',
+      moneda,
+    };
+  };
+
+  const recalcularProyectoV34 = async (proyecto: ProyectoGuardado) => {
+    if (!authUser) {
+      setAuthMode('login');
+      setAuthMessage('Inicia sesión para recalcular proyectos.');
+      setShowAuth(true);
+      return;
+    }
+
+    setRecalculandoId(proyecto.id);
+    setMensajeProyecto('');
+    setRecalculoPreview(null);
+
+    try {
+      const evaluacion = evaluarRecalculoV34(proyecto);
+      const payload = evaluacion.payload;
+      const nombreSeguro = proyecto.project_name?.trim() || 'Proyecto sin nombre';
+
+      // Los históricos incompletos no se envían al motor y tampoco generan
+      // una excepción en desarrollo. Se informa al usuario de forma normal.
+      if (!evaluacion.listo) {
+        setMensajeProyecto(
+          `No se puede recalcular "${nombreSeguro}" todavía. Faltan o son inconsistentes: ${evaluacion.faltantes.join(', ')}. Pulsa "Completar para V3.4".`
+        );
+        return;
+      }
+
+      const respuesta = await fetch(`${API_URL}/simular`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      let data: any = null;
+      try {
+        data = await respuesta.json();
+      } catch {
+        throw new Error('El motor respondió con un formato no válido.');
+      }
+
+      if (!respuesta.ok) {
+        const detalle =
+          typeof data?.detail === 'string'
+            ? data.detail
+            : data?.detail
+              ? JSON.stringify(data.detail)
+              : `HTTP ${respuesta.status}`;
+        throw new Error(detalle);
+      }
+
+      if (!data?.metricas) {
+        throw new Error('El motor V3.4 no devolvió métricas financieras.');
+      }
+
+      setRecalculoPreview({
+        proyecto,
+        resultado: data,
+        inputsNormalizados: payload,
+      });
+
+      setMensajeProyecto(
+        `Vista previa V3.4 generada para "${proyecto.project_name}". Aún no se ha modificado el proyecto guardado.`
+      );
+    } catch (error: any) {
+      const nombreSeguro = proyecto.project_name?.trim() || 'Proyecto sin nombre';
+      setMensajeProyecto(
+        `No se pudo recalcular "${nombreSeguro}": ${error?.message || 'error desconocido'}`
+      );
+    } finally {
+      setRecalculandoId(null);
+    }
+  };
+
+  const actualizarOriginalConRecalculo = async () => {
+    if (!authUser || !recalculoPreview) return;
+
+    const confirmar = window.confirm(
+      `¿Actualizar los resultados de "${recalculoPreview.proyecto.project_name}" con el motor V3.4?\n\n` +
+      'Los datos económicos originales se conservan. Se reemplazarán los resultados financieros guardados por los nuevos.'
+    );
+
+    if (!confirmar) return;
+
+    setGuardandoRecalculo(true);
+    setMensajeProyecto('');
+
+    const ahora = new Date().toISOString();
+    const motorAnterior =
+      recalculoPreview.proyecto.inputs?._motor_version || 'legacy';
+
+    // Al actualizar el original NO reemplazamos sus inputs históricos.
+    // Solo sustituimos los resultados financieros después de la
+    // confirmación explícita del usuario.
+    const resultadoConAuditoria = {
+      ...recalculoPreview.resultado,
+      _recalculo_meta: {
+        motor_nuevo: '3.4',
+        motor_anterior: motorAnterior,
+        recalculado_en: ahora,
+        fuente: 'inputs_originales_guardados',
+      },
+    };
+
+    try {
+      const { error } = await supabase
+        .from('simulations')
+        .update({
+          financial_results: resultadoConAuditoria,
+          monte_carlo_results:
+            recalculoPreview.resultado?.monte_carlo_results ?? null,
+          status: 'completed',
+          updated_at: ahora,
+        })
+        .eq('id', recalculoPreview.proyecto.id)
+        .eq('user_id', authUser.id);
+
+      if (error) throw error;
+
+      setMensajeProyecto(
+        `Proyecto "${recalculoPreview.proyecto.project_name}" actualizado con resultados V3.4.`
+      );
+      setRecalculoPreview(null);
+      await cargarProyectos(authUser.id);
+    } catch (error: any) {
+      console.error(error);
+      setMensajeProyecto(
+        `No se pudo actualizar el proyecto: ${error?.message || 'error desconocido'}`
+      );
+    } finally {
+      setGuardandoRecalculo(false);
+    }
+  };
+
+  const guardarRecalculoComoCopia = async () => {
+    if (!authUser || !recalculoPreview) return;
+
+    setGuardandoRecalculo(true);
+    setMensajeProyecto('');
+
+    const ahora = new Date().toISOString();
+    const motorAnterior =
+      recalculoPreview.proyecto.inputs?._motor_version || 'legacy';
+
+    const inputsCopia = {
+      ...recalculoPreview.inputsNormalizados,
+      _motor_version: '3.4',
+      _recalculado_desde_motor: motorAnterior,
+      _recalculado_en: ahora,
+      _origen_proyecto_id: recalculoPreview.proyecto.id,
+    };
+
+    try {
+      const { error } = await supabase
+        .from('simulations')
+        .insert({
+          user_id: authUser.id,
+          project_name: `${recalculoPreview.proyecto.project_name} (V3.4)`,
+          inputs: inputsCopia,
+          financial_results: {
+            ...recalculoPreview.resultado,
+            _recalculo_meta: {
+              motor_nuevo: '3.4',
+              motor_anterior: motorAnterior,
+              recalculado_en: ahora,
+              fuente: 'inputs_originales_guardados',
+              proyecto_origen_id: recalculoPreview.proyecto.id,
+            },
+          },
+          monte_carlo_results:
+            recalculoPreview.resultado?.monte_carlo_results ?? null,
+          llm_analysis: null,
+          status: 'completed',
+          updated_at: ahora,
+        });
+
+      if (error) throw error;
+
+      setMensajeProyecto(
+        `Copia V3.4 creada. El proyecto original "${recalculoPreview.proyecto.project_name}" quedó intacto.`
+      );
+      setRecalculoPreview(null);
+      await cargarProyectos(authUser.id);
+    } catch (error: any) {
+      console.error(error);
+      setMensajeProyecto(
+        `No se pudo guardar la copia V3.4: ${error?.message || 'error desconocido'}`
+      );
+    } finally {
+      setGuardandoRecalculo(false);
+    }
+  };
+
   const abrirProyecto = (proyecto: ProyectoGuardado) => {
     const inputs = proyecto.inputs || {};
     const ventas = inputs.ventas || {};
@@ -487,6 +834,17 @@ export default function Home() {
 
     setMensajeProyecto(`Proyecto "${proyecto.project_name}" abierto.`);
     setActiveTab(proyecto.financial_results?.metricas ? 'resultados' : 'simulador');
+  };
+
+  const completarProyectoParaV34 = (proyecto: ProyectoGuardado) => {
+    const evaluacion = evaluarRecalculoV34(proyecto);
+    const nombreSeguro = proyecto.project_name?.trim() || 'Proyecto sin nombre';
+
+    abrirProyecto(proyecto);
+    setActiveTab('simulador');
+    setMensajeProyecto(
+      `Completa "${nombreSeguro}" antes de recalcular. Revisa especialmente: ${evaluacion.faltantes.join(', ') || 'datos del proyecto'}. Luego genera una simulación nueva y guárdala.`
+    );
   };
 
   const duplicarProyecto = async (proyecto: ProyectoGuardado) => {
@@ -1032,6 +1390,155 @@ export default function Home() {
             </div>
 
             {authUser && proyectos.length > 0 && (
+              <div className="mb-5 rounded-2xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/10 overflow-hidden">
+                <div className="p-5 border-b border-emerald-200 dark:border-emerald-800">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-black text-emerald-900 dark:text-emerald-200">
+                        🧹 Saneamiento histórico V3.4
+                      </h3>
+                      <p className="text-sm text-emerald-800/80 dark:text-emerald-300/80 mt-1 max-w-3xl">
+                        Auditoría de tus proyectos guardados. Ninguna acción de este panel sobrescribe un proyecto sin tu confirmación.
+                      </p>
+                    </div>
+
+                    <div className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800">
+                      <p className="text-[10px] uppercase font-bold text-slate-500">Progreso V3.4</p>
+                      <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">
+                        {resumenSaneamiento.v34}/{resumenSaneamiento.total}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+                    <button
+                      onClick={() => setFiltroSaneamiento('todos')}
+                      className={`cursor-pointer rounded-xl p-3 text-left border transition-all ${
+                        filtroSaneamiento === 'todos'
+                          ? 'border-slate-500 bg-slate-100 dark:bg-slate-800'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50'
+                      }`}
+                    >
+                      <p className="text-[10px] uppercase font-bold text-slate-500">Total</p>
+                      <p className="text-2xl font-black text-slate-800 dark:text-white">{resumenSaneamiento.total}</p>
+                    </button>
+
+                    <button
+                      onClick={() => setFiltroSaneamiento('v34')}
+                      className={`cursor-pointer rounded-xl p-3 text-left border transition-all ${
+                        filtroSaneamiento === 'v34'
+                          ? 'border-emerald-500 bg-emerald-100 dark:bg-emerald-900/30'
+                          : 'border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900/50'
+                      }`}
+                    >
+                      <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Ya V3.4</p>
+                      <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{resumenSaneamiento.v34}</p>
+                    </button>
+
+                    <button
+                      onClick={() => setFiltroSaneamiento('listos')}
+                      className={`cursor-pointer rounded-xl p-3 text-left border transition-all ${
+                        filtroSaneamiento === 'listos'
+                          ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-900/30'
+                          : 'border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900/50'
+                      }`}
+                    >
+                      <p className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">Listos</p>
+                      <p className="text-2xl font-black text-indigo-700 dark:text-indigo-300">{resumenSaneamiento.listos}</p>
+                    </button>
+
+                    <button
+                      onClick={() => setFiltroSaneamiento('incompletos')}
+                      className={`cursor-pointer rounded-xl p-3 text-left border transition-all ${
+                        filtroSaneamiento === 'incompletos'
+                          ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/30'
+                          : 'border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900/50'
+                      }`}
+                    >
+                      <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Completar</p>
+                      <p className="text-2xl font-black text-amber-700 dark:text-amber-300">{resumenSaneamiento.incompletos}</p>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  <div className="space-y-2 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
+                    {proyectosSaneamiento.map((proyecto) => {
+                      const estado = obtenerEstadoSaneamiento(proyecto);
+                      const nombreSeguro = proyecto.project_name?.trim() || 'Proyecto sin nombre';
+
+                      return (
+                        <div
+                          key={`saneamiento-${proyecto.id}`}
+                          className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-black text-slate-800 dark:text-white truncate">
+                              {nombreSeguro}
+                            </p>
+
+                            {estado.codigo === 'v34' ? (
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-1">
+                                ✅ Resultados compatibles con V3.4.
+                              </p>
+                            ) : estado.codigo === 'listo' ? (
+                              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-1">
+                                🔄 Tiene inputs suficientes para generar una vista previa V3.4.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-amber-700 dark:text-amber-300 font-bold mt-1">
+                                🧩 Falta revisar: {estado.faltantes.join(', ')}.
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
+                                estado.codigo === 'v34'
+                                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                  : estado.codigo === 'listo'
+                                    ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300'
+                              }`}
+                            >
+                              {estado.etiqueta}
+                            </span>
+
+                            {estado.codigo === 'listo' && (
+                              <button
+                                onClick={() => recalcularProyectoV34(proyecto)}
+                                disabled={recalculandoId === proyecto.id || guardandoRecalculo}
+                                className="cursor-pointer px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-black hover:bg-emerald-500 disabled:opacity-50"
+                              >
+                                {recalculandoId === proyecto.id ? 'Recalculando...' : 'Vista previa'}
+                              </button>
+                            )}
+
+                            {estado.codigo === 'incompleto' && (
+                              <button
+                                onClick={() => completarProyectoParaV34(proyecto)}
+                                className="cursor-pointer px-3 py-2 rounded-lg bg-amber-500 text-amber-950 text-xs font-black hover:bg-amber-400"
+                              >
+                                Completar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-3">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      Objetivo del saneamiento: llevar gradualmente los proyectos históricos a resultados V3.4 manteniendo sus inputs originales. Los proyectos incompletos se corrigen manualmente; no se rellenan con supuestos de las plantillas 2026.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {authUser && proyectos.length > 0 && (
               <div className="mb-5 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -1302,6 +1809,7 @@ export default function Home() {
                   const metricas = proyecto.financial_results?.metricas || {};
                   const fecha = proyecto.updated_at || proyecto.created_at;
                   const seleccionado = proyectosSeleccionadosIds.includes(proyecto.id);
+                  const estadoRecalculo = evaluarRecalculoV34(proyecto);
 
                   return (
                     <div
@@ -1379,6 +1887,24 @@ export default function Home() {
                         >
                           Duplicar
                         </button>
+                        {estadoRecalculo.listo ? (
+                          <button
+                            onClick={() => recalcularProyectoV34(proyecto)}
+                            disabled={recalculandoId === proyecto.id || guardandoRecalculo}
+                            className="cursor-pointer px-3 py-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-900/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Calcula una vista previa con el motor V3.4 sin modificar el proyecto guardado."
+                          >
+                            {recalculandoId === proyecto.id ? 'Recalculando...' : '🔄 Recalcular V3.4'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => completarProyectoParaV34(proyecto)}
+                            className="cursor-pointer px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50"
+                            title={`Faltan datos para recalcular: ${estadoRecalculo.faltantes.join(', ')}`}
+                          >
+                            🧩 Completar para V3.4
+                          </button>
+                        )}
                         <button
                           onClick={() => eliminarProyecto(proyecto)}
                           className="cursor-pointer px-3 py-2 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-sm font-bold hover:bg-rose-200 dark:hover:bg-rose-900/50"
@@ -1619,6 +2145,201 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* MODAL DE RECÁLCULO SEGURO V3.4 */}
+      {recalculoPreview && (() => {
+        const moneda = recalculoPreview.proyecto.inputs?.moneda || 'S/';
+        const anteriores = obtenerMetricasResultado(
+          recalculoPreview.proyecto.financial_results,
+          moneda
+        );
+        const nuevos = obtenerMetricasResultado(
+          recalculoPreview.resultado,
+          moneda
+        );
+        const motorAnterior =
+          recalculoPreview.proyecto.inputs?._motor_version || 'Histórico / Legacy';
+
+        const filas = [
+          {
+            label: 'Inversión inicial',
+            anterior: `${anteriores.moneda} ${anteriores.inversion.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`,
+            nuevo: `${nuevos.moneda} ${nuevos.inversion.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`,
+          },
+          {
+            label: 'VAN',
+            anterior: `${anteriores.moneda} ${anteriores.van.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`,
+            nuevo: `${nuevos.moneda} ${nuevos.van.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`,
+          },
+          {
+            label: 'TIR',
+            anterior: `${anteriores.tir.toFixed(1)}%`,
+            nuevo: `${nuevos.tir.toFixed(1)}%`,
+          },
+          {
+            label: 'ROI',
+            anterior: `${anteriores.roi.toFixed(1)}%`,
+            nuevo: `${nuevos.roi.toFixed(1)}%`,
+          },
+          {
+            label: 'B/C',
+            anterior: anteriores.bc.toFixed(2),
+            nuevo: nuevos.bc.toFixed(2),
+          },
+          {
+            label: 'Payback',
+            anterior:
+              anteriores.payback === null || anteriores.payback === undefined
+                ? 'No recupera / sin dato'
+                : `${Number(anteriores.payback).toFixed(2)} meses`,
+            nuevo:
+              nuevos.payback === null || nuevos.payback === undefined
+                ? 'No recupera / sin dato'
+                : `${Number(nuevos.payback).toFixed(2)} meses`,
+          },
+          {
+            label: 'Liquidez',
+            anterior: anteriores.liquidez,
+            nuevo: nuevos.liquidez,
+          },
+          {
+            label: 'Riesgo',
+            anterior:
+              anteriores.riesgo === null || anteriores.riesgo === undefined
+                ? 'Sin dato'
+                : `${Number(anteriores.riesgo).toFixed(0)}%`,
+            nuevo:
+              nuevos.riesgo === null || nuevos.riesgo === undefined
+                ? 'Sin dato'
+                : `${Number(nuevos.riesgo).toFixed(0)}%`,
+          },
+          {
+            label: 'Score',
+            anterior: `${anteriores.score.toFixed(0)}/100`,
+            nuevo: `${nuevos.score.toFixed(0)}/100`,
+          },
+          {
+            label: 'Dictamen',
+            anterior: anteriores.recomendacion,
+            nuevo: nuevos.recomendacion,
+          },
+        ];
+
+        return (
+          <div className="fixed inset-0 z-[110] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
+            <div className="w-full max-w-5xl max-h-[92vh] overflow-y-auto custom-scrollbar bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 p-5 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-b border-slate-200 dark:border-slate-700">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+                    🔄 Vista previa de recálculo V3.4
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    {recalculoPreview.proyecto.project_name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setRecalculoPreview(null)}
+                  disabled={guardandoRecalculo}
+                  className="cursor-pointer text-slate-400 hover:text-slate-700 dark:hover:text-white text-xl disabled:opacity-50"
+                  aria-label="Cerrar"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-5">
+                <div className="mb-5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
+                  <p className="font-black text-emerald-800 dark:text-emerald-300">
+                    ✅ Aún no se ha modificado nada en Supabase.
+                  </p>
+                  <p className="text-sm text-emerald-700/90 dark:text-emerald-300/90 mt-1">
+                    Esta pantalla usa los inputs guardados del proyecto y compara sus resultados anteriores con un cálculo nuevo del motor V3.4.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+                    <p className="text-[10px] uppercase font-bold text-slate-500">Motor guardado</p>
+                    <p className="font-black text-slate-800 dark:text-white mt-1">{motorAnterior}</p>
+                  </div>
+                  <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-3">
+                    <p className="text-[10px] uppercase font-bold text-indigo-500">Motor nuevo</p>
+                    <p className="font-black text-indigo-800 dark:text-indigo-200 mt-1">V3.4</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+                    <p className="text-[10px] uppercase font-bold text-slate-500">Proyecto original</p>
+                    <p className="font-black text-slate-800 dark:text-white mt-1 truncate">
+                      {recalculoPreview.proyecto.project_name}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700">
+                        <th className="text-left p-3 font-black text-slate-700 dark:text-slate-200">Indicador</th>
+                        <th className="text-left p-3 font-black text-slate-700 dark:text-slate-200">Antes</th>
+                        <th className="text-left p-3 font-black text-emerald-700 dark:text-emerald-300">Nuevo V3.4</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filas.map((fila) => (
+                        <tr key={fila.label} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                          <td className="p-3 font-black text-slate-600 dark:text-slate-300 bg-slate-50/60 dark:bg-slate-900/30">
+                            {fila.label}
+                          </td>
+                          <td className="p-3 font-bold text-slate-700 dark:text-slate-300">
+                            {fila.anterior}
+                          </td>
+                          <td className="p-3 font-black text-emerald-700 dark:text-emerald-300">
+                            {fila.nuevo}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3">
+                  <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    El recálculo no toma los valores de las plantillas 2026. Usa los inputs que ya estaban guardados en este proyecto.
+                  </p>
+                  <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-1">
+                    “Guardar como copia” conserva intacto el original. “Actualizar original” requiere confirmación adicional.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setRecalculoPreview(null)}
+                    disabled={guardandoRecalculo}
+                    className="cursor-pointer px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    onClick={guardarRecalculoComoCopia}
+                    disabled={guardandoRecalculo}
+                    className="cursor-pointer px-5 py-3 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-black hover:bg-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50"
+                  >
+                    {guardandoRecalculo ? 'Guardando...' : '📄 Guardar como copia V3.4'}
+                  </button>
+
+                  <button
+                    onClick={actualizarOriginalConRecalculo}
+                    disabled={guardandoRecalculo}
+                    className="cursor-pointer px-5 py-3 rounded-xl bg-emerald-600 text-white font-black hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {guardandoRecalculo ? 'Actualizando...' : '✅ Actualizar original'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* MODAL DE ACCESO */}
       {showAuth && (
         <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
