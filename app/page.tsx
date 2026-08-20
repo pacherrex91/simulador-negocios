@@ -1,12 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
+import type { User } from "@supabase/supabase-js";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import * as XLSX from 'xlsx';
+import { supabase } from './supabase';
 
 // 🔥 CONFIGURACIÓN DE CONEXIÓN 🔥
 const API_URL = "https://simulador-backend-ytbv.onrender.com"; 
-// const API_URL = "https://simulador-backend-ytbv.onrender.com](https://simulador-backend-ytbv.onrender.com";
+
 
 // COMPONENTE TOOLTIP REPARADO (Usa <span> en vez de <div> para no romper HTML)
 const InfoTooltip = ({ text }: { text: string }) => (
@@ -146,10 +148,37 @@ const TEMPLATES: any = {
 
 const CATEGORIAS_ITEMS = ["Insumos", "Equipos", "Proveedores", "Personal", "Marketing", "Otros"];
 
+type ProyectoGuardado = {
+  id: string;
+  user_id: string | null;
+  project_name: string;
+  inputs: any;
+  financial_results: any;
+  monte_carlo_results?: any;
+  llm_analysis?: any;
+  status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState('simulador');
   const [darkMode, setDarkMode] = useState(false);
-  const [user, setUser] = useState({ name: "Manuel - Admin", isLogged: true });
+  // --- SUPABASE AUTH + MIS PROYECTOS ---
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
+
+  const [proyectos, setProyectos] = useState<ProyectoGuardado[]>([]);
+  const [proyectosLoading, setProyectosLoading] = useState(false);
+  const [proyectoActualId, setProyectoActualId] = useState<string | null>(null);
+  const [guardandoProyecto, setGuardandoProyecto] = useState(false);
+  const [mensajeProyecto, setMensajeProyecto] = useState('');
   
   const [formData, setFormData] = useState<any>({
     nombre_idea: "", sector: "", moneda: "S/", capital_disponible: 25000,
@@ -180,10 +209,330 @@ export default function Home() {
     else document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
+  const cargarProyectos = async (userId?: string) => {
+    const idUsuario = userId || authUser?.id;
+
+    if (!idUsuario) {
+      setProyectos([]);
+      return;
+    }
+
+    setProyectosLoading(true);
+    setMensajeProyecto('');
+
+    const { data, error } = await supabase
+      .from('simulations')
+      .select('id,user_id,project_name,inputs,financial_results,monte_carlo_results,llm_analysis,status,created_at,updated_at')
+      .eq('user_id', idUsuario)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error(error);
+      setMensajeProyecto(`No se pudieron cargar tus proyectos: ${error.message}`);
+      setProyectos([]);
+    } else {
+      setProyectos((data || []) as ProyectoGuardado[]);
+    }
+
+    setProyectosLoading(false);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setAuthUser(data.session?.user ?? null);
+      setAuthReady(true);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+      setAuthReady(true);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authUser) {
+      cargarProyectos(authUser.id);
+    } else {
+      setProyectos([]);
+      setProyectoActualId(null);
+    }
+  }, [authUser?.id]);
+
+  const autenticar = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!authEmail.trim()) {
+      setAuthMessage('Escribe tu correo.');
+      return;
+    }
+
+    if (authPassword.length < 6) {
+      setAuthMessage('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthMessage('');
+
+    try {
+      if (authMode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmail.trim(),
+          password: authPassword,
+        });
+
+        if (error) throw error;
+
+        setAuthMessage('Sesión iniciada correctamente.');
+        setShowAuth(false);
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email: authEmail.trim(),
+          password: authPassword,
+          options: {
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.session) {
+          setAuthMessage('Cuenta creada y sesión iniciada.');
+          setShowAuth(false);
+        } else {
+          setAuthMessage('Cuenta creada. Revisa tu correo para confirmar el acceso.');
+        }
+      }
+    } catch (error: any) {
+      setAuthMessage(error?.message || 'No se pudo completar el acceso.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const cerrarSesion = async () => {
+    await supabase.auth.signOut();
+    setActiveTab('simulador');
+    setMensajeProyecto('');
+    setConsejoIA('');
+  };
+
+  const construirInputsGuardados = () => ({
+    ...formData,
+    inversion_dinamica: invItems,
+    gastos_dinamicos: gastoItems,
+    _frontend_schema_version: 2,
+    _motor_version: '3.4',
+  });
+
+  const guardarProyecto = async (forzarNuevo = false) => {
+    if (!authUser) {
+      setAuthMode('login');
+      setAuthMessage('Inicia sesión para guardar el proyecto.');
+      setShowAuth(true);
+      return;
+    }
+
+    if (!res?.metricas) {
+      alert('Primero genera la simulación.');
+      return;
+    }
+
+    const nombreProyecto = (formData.nombre_idea || 'Proyecto sin nombre').trim();
+    const ahora = new Date().toISOString();
+
+    const registro = {
+      user_id: authUser.id,
+      project_name: nombreProyecto,
+      inputs: construirInputsGuardados(),
+      financial_results: res,
+      monte_carlo_results: res?.monte_carlo_results ?? null,
+      llm_analysis: consejoIA
+        ? { rol: activeRol || 'general', contenido: consejoIA, updated_at: ahora }
+        : null,
+      status: 'completed',
+      updated_at: ahora,
+    };
+
+    setGuardandoProyecto(true);
+    setMensajeProyecto('');
+
+    try {
+      if (proyectoActualId && !forzarNuevo) {
+        const { data, error } = await supabase
+          .from('simulations')
+          .update(registro)
+          .eq('id', proyectoActualId)
+          .eq('user_id', authUser.id)
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        setProyectoActualId(data.id);
+        setMensajeProyecto('Proyecto actualizado correctamente.');
+      } else {
+        const { data, error } = await supabase
+          .from('simulations')
+          .insert(registro)
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        setProyectoActualId(data.id);
+        setMensajeProyecto('Proyecto guardado correctamente.');
+      }
+
+      await cargarProyectos(authUser.id);
+    } catch (error: any) {
+      console.error(error);
+      setMensajeProyecto(`No se pudo guardar: ${error?.message || 'error desconocido'}`);
+    } finally {
+      setGuardandoProyecto(false);
+    }
+  };
+
+  const convertirInversionLegacy = (inputs: any) => {
+    if (Array.isArray(inputs?.inversion_dinamica)) return inputs.inversion_dinamica;
+
+    const inv = inputs?.inversion;
+    if (!inv) return [];
+
+    return [
+      { id: 'legacy-insumos', nombre: 'Insumos', monto: Number(inv.insumos || 0), categoria: 'Insumos', vida_util: 0, residual: 0 },
+      { id: 'legacy-equipos', nombre: 'Equipos', monto: Number(inv.equipos || 0), categoria: 'Equipos', vida_util: 60, residual: Number(inv.equipos || 0) * 0.10 },
+      { id: 'legacy-empaques', nombre: 'Empaques', monto: Number(inv.empaques || 0), categoria: 'Otros', vida_util: 0, residual: 0 },
+      { id: 'legacy-permisos', nombre: 'Permisos', monto: Number(inv.permisos || 0), categoria: 'Otros', vida_util: 0, residual: 0 },
+      { id: 'legacy-otros', nombre: 'Otros', monto: Number(inv.otros || 0), categoria: 'Otros', vida_util: 0, residual: 0 },
+    ].filter((x) => x.monto > 0);
+  };
+
+  const convertirGastosLegacy = (inputs: any) => {
+    if (Array.isArray(inputs?.gastos_dinamicos)) return inputs.gastos_dinamicos;
+
+    const gf = inputs?.gastos_fijos;
+    if (!gf) return [];
+
+    return [
+      { id: 'legacy-marketing', nombre: 'Marketing', monto: Number(gf.marketing || 0), categoria: 'Marketing' },
+      { id: 'legacy-logistica', nombre: 'Logística', monto: Number(gf.logistica || 0), categoria: 'Proveedores' },
+      { id: 'legacy-sueldo', nombre: 'Sueldo Emprendedor', monto: Number(gf.sueldo_emprendedor || 0), categoria: 'Personal' },
+      { id: 'legacy-otros-fijos', nombre: 'Otros Fijos', monto: Number(gf.otros || 0), categoria: 'Otros' },
+    ].filter((x) => x.monto > 0);
+  };
+
+  const abrirProyecto = (proyecto: ProyectoGuardado) => {
+    const inputs = proyecto.inputs || {};
+    const ventas = inputs.ventas || {};
+
+    setFormData({
+      nombre_idea: inputs.nombre_idea ?? proyecto.project_name ?? '',
+      sector: inputs.sector ?? '',
+      moneda: inputs.moneda ?? 'S/',
+      capital_disponible: Number(inputs.capital_disponible ?? 10000),
+      precio_venta: Number(inputs.precio_venta ?? 0),
+      costo_directo: Number(inputs.costo_directo ?? 0),
+      regimen_tributario: inputs.regimen_tributario ?? 'NRUS',
+      inflacion_anual: Number(inputs.inflacion_anual ?? 3),
+      ventas: {
+        pesimista: Number(ventas.pesimista ?? 0),
+        base: Number(ventas.base ?? 0),
+        optimista: Number(ventas.optimista ?? 0),
+        crecimiento_mensual: Number(ventas.crecimiento_mensual ?? 0),
+      },
+      tasa_descuento: Number(inputs.tasa_descuento ?? 12),
+      meses_reserva: Number(inputs.meses_reserva ?? 3),
+      estacionalidad: Array.isArray(inputs.estacionalidad)
+        ? [...inputs.estacionalidad, ...Array(12).fill(0)].slice(0, 12)
+        : Array(12).fill(0),
+      solicitar_prestamo: Boolean(inputs.solicitar_prestamo || Number(inputs.financiamiento_monto || 0) > 0),
+      financiamiento_monto: Number(inputs.financiamiento_monto ?? 0),
+      financiamiento_tasa_mensual: Number(inputs.financiamiento_tasa_mensual ?? 1.5),
+      financiamiento_plazo: Number(inputs.financiamiento_plazo ?? 24),
+    });
+
+    setInvItems(convertirInversionLegacy(inputs));
+    setGastoItems(convertirGastosLegacy(inputs));
+    setRes(proyecto.financial_results || null);
+    setProyectoActualId(proyecto.id);
+
+    const analisis = proyecto.llm_analysis;
+    if (typeof analisis === 'string') {
+      setConsejoIA(analisis);
+    } else {
+      setConsejoIA(analisis?.contenido || '');
+      setActiveRol(analisis?.rol || '');
+    }
+
+    setMensajeProyecto(`Proyecto "${proyecto.project_name}" abierto.`);
+    setActiveTab(proyecto.financial_results?.metricas ? 'resultados' : 'simulador');
+  };
+
+  const duplicarProyecto = async (proyecto: ProyectoGuardado) => {
+    if (!authUser) return;
+
+    setGuardandoProyecto(true);
+    setMensajeProyecto('');
+
+    const ahora = new Date().toISOString();
+    const { error } = await supabase
+      .from('simulations')
+      .insert({
+        user_id: authUser.id,
+        project_name: `${proyecto.project_name} (copia)`,
+        inputs: proyecto.inputs,
+        financial_results: proyecto.financial_results,
+        monte_carlo_results: proyecto.monte_carlo_results ?? null,
+        llm_analysis: proyecto.llm_analysis ?? null,
+        status: proyecto.status || 'completed',
+        updated_at: ahora,
+      });
+
+    if (error) {
+      setMensajeProyecto(`No se pudo duplicar: ${error.message}`);
+    } else {
+      setMensajeProyecto('Proyecto duplicado.');
+      await cargarProyectos(authUser.id);
+    }
+
+    setGuardandoProyecto(false);
+  };
+
+  const eliminarProyecto = async (proyecto: ProyectoGuardado) => {
+    if (!authUser) return;
+
+    const confirmar = window.confirm(`¿Eliminar "${proyecto.project_name}"? Esta acción no se puede deshacer.`);
+    if (!confirmar) return;
+
+    const { error } = await supabase
+      .from('simulations')
+      .delete()
+      .eq('id', proyecto.id)
+      .eq('user_id', authUser.id);
+
+    if (error) {
+      setMensajeProyecto(`No se pudo eliminar: ${error.message}`);
+      return;
+    }
+
+    if (proyectoActualId === proyecto.id) setProyectoActualId(null);
+    setMensajeProyecto('Proyecto eliminado.');
+    await cargarProyectos(authUser.id);
+  };
+
   const invTotal = invItems.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0);
   const gastoTotal = gastoItems.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0);
 
   const cargarPlantilla = (key: string) => {
+    setProyectoActualId(null);
+    setMensajeProyecto('');
     if (key === 'vacio') {
        setFormData(TEMPLATES.vacio); setInvItems([]); setGastoItems([]); setRes(null);
     } else {
@@ -222,7 +571,7 @@ export default function Home() {
       setRes(data);
       setActiveTab('resultados');
     } catch (error) { 
-      alert("⚠️ No se pudo conectar al Backend.\nAsegúrate de que 'uvicorn main:app --reload' esté corriendo en la terminal de Python."); 
+      alert("⚠️ No se pudo conectar al servidor del simulador. Verifica tu conexión a Internet e inténtalo nuevamente."); 
     }
     setLoading(false);
   };
@@ -283,15 +632,40 @@ export default function Home() {
         <div className="flex flex-wrap justify-between items-center mb-8 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
-                 {user.name.charAt(0)}
+                 {(authUser?.email || 'I').charAt(0).toUpperCase()}
               </div>
               <div>
-                 <p className="text-sm font-bold dark:text-white">{user.name}</p>
-                 <p className="text-xs text-slate-500 dark:text-slate-400">Motor V3.3 - Enterprise</p>
+                 <p className="text-sm font-bold dark:text-white">
+                   {!authReady ? 'Verificando sesión...' : authUser?.email || 'Invitado'}
+                 </p>
+                 <p className="text-xs text-slate-500 dark:text-slate-400">Motor V3.4 · Finanzas + IA + Proyectos</p>
               </div>
            </div>
-           
-           <div className="flex items-center gap-3 mt-4 md:mt-0">
+
+           <div className="flex items-center gap-2 mt-4 md:mt-0 flex-wrap justify-end">
+              {authUser ? (
+                <>
+                  <button
+                    onClick={() => { setActiveTab('proyectos'); cargarProyectos(); }}
+                    className="cursor-pointer px-3 py-2 text-sm font-bold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
+                  >
+                    📁 Mis Proyectos
+                  </button>
+                  <button
+                    onClick={cerrarSesion}
+                    className="cursor-pointer px-3 py-2 text-sm font-bold rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                  >
+                    Cerrar sesión
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => { setAuthMode('login'); setAuthMessage(''); setShowAuth(true); }}
+                  className="cursor-pointer px-4 py-2 text-sm font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+                >
+                  Iniciar sesión
+                </button>
+              )}
               <button onClick={() => setDarkMode(!darkMode)} className="cursor-pointer text-xl p-2 bg-slate-100 dark:bg-slate-700 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title={darkMode ? 'Modo Claro' : 'Modo Oscuro'}>
                 {darkMode ? '☀️' : '🌙'}
               </button>
@@ -300,9 +674,24 @@ export default function Home() {
 
         <header className="mb-6 text-center">
           <h1 className="text-4xl font-extrabold text-indigo-700 dark:text-indigo-400">Decisiones de Inversión IA</h1>
-          <div className="flex justify-center mt-6 gap-2">
+          <div className="flex justify-center mt-6 gap-2 flex-wrap">
             <button onClick={() => setActiveTab('simulador')} className={`cursor-pointer px-6 py-2 font-bold rounded-lg transition-colors ${activeTab === 'simulador' ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>1. Configurar</button>
             <button onClick={() => {if(res && res.metricas)setActiveTab('resultados')}} className={`cursor-pointer px-6 py-2 font-bold rounded-lg transition-colors ${activeTab === 'resultados' ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'} ${(!res || !res.metricas) && 'opacity-50 cursor-not-allowed'}`}>2. Resultados & Dictamen</button>
+            <button
+              onClick={() => {
+                if (authUser) {
+                  setActiveTab('proyectos');
+                  cargarProyectos();
+                } else {
+                  setAuthMode('login');
+                  setAuthMessage('Inicia sesión para ver tus proyectos.');
+                  setShowAuth(true);
+                }
+              }}
+              className={`cursor-pointer px-6 py-2 font-bold rounded-lg transition-colors ${activeTab === 'proyectos' ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            >
+              3. Mis Proyectos {authUser ? `(${proyectos.length})` : ''}
+            </button>
           </div>
         </header>
       </div>
@@ -382,8 +771,19 @@ export default function Home() {
                               {CATEGORIAS_ITEMS.map(c=><option key={c}>{c}</option>)}
                             </select>
                             <input type="number" value={item.monto} onChange={e=>updateInv(item.id, 'monto', Number(e.target.value))} className="w-20 text-sm bg-transparent outline-none font-bold dark:text-white" />
-                            {item.categoria === 'Equipos' && <input type="number" placeholder="Meses Vida" title="Vida Util Meses" value={item.vida_util} onChange={e=>updateInv(item.id, 'vida_util', Number(e.target.value))} className="w-16 text-xs bg-white dark:bg-slate-800 dark:text-white border dark:border-slate-600 p-1 rounded" />}
-                            <button onClick={()=>setInvItems(invItems.filter(x=>x.id!==item.id))} className="cursor-pointer text-rose-500 hover:text-rose-700 font-bold px-2">✕</button>
+                            {item.categoria === 'Equipos' ? (
+                              <input
+                                type="number"
+                                placeholder="Vida"
+                                title="Vida útil en meses"
+                                value={item.vida_util}
+                                onChange={e=>updateInv(item.id, 'vida_util', Number(e.target.value))}
+                                className="w-16 shrink-0 text-xs bg-white dark:bg-slate-800 dark:text-white border dark:border-slate-600 p-1 rounded"
+                              />
+                            ) : (
+                              <div className="w-16 shrink-0" aria-hidden="true"></div>
+                            )}
+                            <button onClick={()=>setInvItems(invItems.filter(x=>x.id!==item.id))} className="cursor-pointer w-8 shrink-0 text-rose-500 hover:text-rose-700 font-bold text-center">✕</button>
                          </div>
                       ))}
                     </div>
@@ -433,6 +833,106 @@ export default function Home() {
         </div>
       )}
 
+      {/* MIS PROYECTOS */}
+      {activeTab === 'proyectos' && (
+        <div className="max-w-6xl mx-auto space-y-6 print:hidden">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-slate-800 dark:text-white">Mis Proyectos</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Tus simulaciones se guardan en la nube y podrás abrirlas desde otra PC o laptop iniciando sesión con la misma cuenta.
+                </p>
+              </div>
+              <button
+                onClick={() => cargarProyectos()}
+                disabled={proyectosLoading}
+                className="cursor-pointer px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-60"
+              >
+                {proyectosLoading ? 'Actualizando...' : '↻ Actualizar'}
+              </button>
+            </div>
+
+            {mensajeProyecto && (
+              <div className="mb-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 text-sm font-medium text-indigo-800 dark:text-indigo-300">
+                {mensajeProyecto}
+              </div>
+            )}
+
+            {!authUser ? (
+              <div className="text-center py-12">
+                <p className="text-slate-500 dark:text-slate-400 mb-4">Inicia sesión para acceder a tus proyectos.</p>
+                <button
+                  onClick={() => { setAuthMode('login'); setAuthMessage(''); setShowAuth(true); }}
+                  className="cursor-pointer px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500"
+                >
+                  Iniciar sesión
+                </button>
+              </div>
+            ) : proyectosLoading ? (
+              <div className="py-12 text-center text-slate-500 dark:text-slate-400">Cargando proyectos...</div>
+            ) : proyectos.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="text-5xl mb-3">📁</div>
+                <p className="font-bold text-slate-700 dark:text-slate-200">Aún no tienes proyectos asociados a esta cuenta.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                  Los proyectos históricos sin usuario se migrarán de forma segura antes de activar RLS.
+                </p>
+                <button
+                  onClick={() => setActiveTab('simulador')}
+                  className="cursor-pointer mt-5 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500"
+                >
+                  Crear una simulación
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {proyectos.map((proyecto) => {
+                  const metricas = proyecto.financial_results?.metricas || {};
+                  const fecha = proyecto.updated_at || proyecto.created_at;
+                  return (
+                    <div key={proyecto.id} className={`rounded-2xl border p-5 ${proyectoActualId === proyecto.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-black text-lg text-slate-800 dark:text-white">{proyecto.project_name || 'Proyecto sin nombre'}</h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {fecha ? `Actualizado: ${new Date(fecha).toLocaleString('es-PE')}` : 'Sin fecha'}
+                          </p>
+                        </div>
+                        {proyectoActualId === proyecto.id && (
+                          <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-indigo-600 text-white">ABIERTO</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 mt-4">
+                        <div className="rounded-lg bg-white dark:bg-slate-800 p-2 border border-slate-200 dark:border-slate-700">
+                          <p className="text-[10px] uppercase font-bold text-slate-500">VAN</p>
+                          <p className="font-black text-sm dark:text-white">{Number(metricas.van || 0).toLocaleString('es-PE')}</p>
+                        </div>
+                        <div className="rounded-lg bg-white dark:bg-slate-800 p-2 border border-slate-200 dark:border-slate-700">
+                          <p className="text-[10px] uppercase font-bold text-slate-500">TIR</p>
+                          <p className="font-black text-sm dark:text-white">{Number(metricas.tir || 0).toFixed(1)}%</p>
+                        </div>
+                        <div className="rounded-lg bg-white dark:bg-slate-800 p-2 border border-slate-200 dark:border-slate-700">
+                          <p className="text-[10px] uppercase font-bold text-slate-500">ROI</p>
+                          <p className="font-black text-sm dark:text-white">{Number(metricas.roi || 0).toFixed(1)}%</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        <button onClick={() => abrirProyecto(proyecto)} className="cursor-pointer px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500">Abrir</button>
+                        <button onClick={() => duplicarProyecto(proyecto)} disabled={guardandoProyecto} className="cursor-pointer px-3 py-2 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-sm font-bold hover:bg-violet-200 dark:hover:bg-violet-900/50 disabled:opacity-60">Duplicar</button>
+                        <button onClick={() => eliminarProyecto(proyecto)} className="cursor-pointer px-3 py-2 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-sm font-bold hover:bg-rose-200 dark:hover:bg-rose-900/50">Eliminar</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* TABS RESULTADOS */}
       {activeTab === 'resultados' && res && res.metricas && (
         <div className="max-w-7xl mx-auto animate-in fade-in zoom-in duration-300">
@@ -441,13 +941,35 @@ export default function Home() {
              <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
                 <div>
                    <h2 className="text-2xl font-black text-slate-800 dark:text-white">{formData.nombre_idea || 'Proyecto sin nombre'}</h2>
-                   <p className="text-sm text-slate-500 dark:text-slate-400">Dictamen Financiero Profesional V3.3</p>
+                   <p className="text-sm text-slate-500 dark:text-slate-400">Dictamen Financiero Profesional V3.4</p>
                 </div>
-                <div className="flex gap-2 print:hidden">
+                <div className="flex gap-2 print:hidden flex-wrap justify-end">
+                   <button
+                     onClick={() => guardarProyecto(false)}
+                     disabled={guardandoProyecto}
+                     className="cursor-pointer bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md transition-colors"
+                   >
+                     {guardandoProyecto ? 'Guardando...' : proyectoActualId ? '💾 Actualizar proyecto' : '💾 Guardar proyecto'}
+                   </button>
+                   {proyectoActualId && (
+                     <button
+                       onClick={() => guardarProyecto(true)}
+                       disabled={guardandoProyecto}
+                       className="cursor-pointer bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md transition-colors"
+                     >
+                       🗂️ Guardar copia
+                     </button>
+                   )}
                    <button onClick={handleExportarExcel} className="cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md transition-colors">📥 Exportar .xlsx</button>
                    <button onClick={exportarPDF} className="cursor-pointer bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md transition-colors">📄 Generar PDF</button>
                 </div>
              </div>
+
+             {mensajeProyecto && (
+               <div className="mb-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 text-sm font-medium text-indigo-800 dark:text-indigo-300">
+                 {mensajeProyecto}
+               </div>
+             )}
 
              <div className={`p-6 rounded-2xl mb-8 text-center border-2 shadow-sm ${estadoRecomendacion.includes("INVERTIR") && !estadoRecomendacion.includes("NO") ? 'bg-emerald-50 border-emerald-400 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-300' : estadoRecomendacion.includes("NO") ? 'bg-rose-50 border-rose-400 text-rose-800 dark:bg-rose-900/20 dark:border-rose-600 dark:text-rose-300' : 'bg-amber-50 border-amber-400 text-amber-800 dark:bg-amber-900/20 dark:border-amber-600 dark:text-amber-300'}`}>
                 <h3 className="text-4xl font-black tracking-tight">{estadoRecomendacion}</h3>
@@ -635,6 +1157,88 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* MODAL DE ACCESO */}
+      {showAuth && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
+          <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+                  {authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Usa la misma cuenta para acceder a tus proyectos desde cualquier equipo.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAuth(false)}
+                className="cursor-pointer text-slate-400 hover:text-slate-700 dark:hover:text-white text-xl"
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={autenticar} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Correo electrónico</label>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  autoComplete="email"
+                  className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                  placeholder="tu@correo.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Contraseña</label>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                  className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+
+              {authMessage && (
+                <div className="rounded-lg bg-slate-100 dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+                  {authMessage}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="cursor-pointer w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-black"
+              >
+                {authLoading
+                  ? 'Procesando...'
+                  : authMode === 'login'
+                    ? 'Entrar'
+                    : 'Crear cuenta'}
+              </button>
+            </form>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'signup' : 'login');
+                setAuthMessage('');
+              }}
+              className="cursor-pointer w-full mt-4 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              {authMode === 'login'
+                ? '¿No tienes cuenta? Crear una'
+                : 'Ya tengo cuenta. Iniciar sesión'}
+            </button>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
