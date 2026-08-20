@@ -1079,6 +1079,47 @@ export default function Home() {
   const estadoRecomendacion = res?.metricas?.recomendacion?.estado || "EVALUANDO";
   const mensajeRecomendacion = res?.metricas?.recomendacion?.msg || "Resultados cargados.";
 
+  // RESUMEN PROFESIONAL V3.4 — solo usa datos entregados por el motor o inputs del usuario.
+  const monedaResultado = formData.moneda || 'S/';
+  const inversionResultado = Number(res?.metricas?.inversion_total || 0);
+  const capitalResultado = Number(formData.capital_disponible || 0);
+  const saldoCapitalResultado = capitalResultado - inversionResultado;
+  const vanResultado = Number(res?.metricas?.van || 0);
+  const tirResultado = Number(res?.metricas?.tir || 0);
+  const roiResultado = Number(res?.metricas?.roi || 0);
+  const bcResultado = Number(res?.metricas?.b_c || 0);
+  const puntoEquilibrioResultado = Number(res?.metricas?.punto_equilibrio || 0);
+  const reservaResultado = Number(res?.metricas?.reserva_emergencia || 0);
+  const paybackResultado =
+    typeof res?.base?.mes_recuperacion === 'number'
+      ? res.base.mes_recuperacion
+      : typeof res?.metricas?.payback_meses === 'number'
+        ? res.metricas.payback_meses
+        : null;
+  const estadoLiquidezResultado = String(
+    res?.metricas?.estado_liquidez ||
+    (alertaLiquidez ? alertaLiquidez : 'Sin dato')
+  );
+  const probabilidadPerdidaResultado =
+    typeof res?.riesgo?.probabilidad_perdida === 'number'
+      ? res.riesgo.probabilidad_perdida
+      : typeof res?.metricas?.probabilidad_perdida === 'number'
+        ? res.metricas.probabilidad_perdida
+        : null;
+  const scoreResultado =
+    typeof res?.metricas?.score === 'number'
+      ? res.metricas.score
+      : null;
+  const impuestos36Resultado = (res?.base?.p_y_g || []).reduce(
+    (acc: number, mes: any) => acc + Number(mes?.impuestos || 0),
+    0
+  );
+  const promedioImpuestoMensualResultado =
+    (res?.base?.p_y_g || []).length > 0
+      ? impuestos36Resultado / (res.base.p_y_g || []).length
+      : 0;
+  const tirMuyAlta = tirResultado >= 100;
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8 font-sans text-slate-800 dark:text-slate-200 print:bg-white print:p-0 transition-colors duration-200">
       
@@ -1924,13 +1965,23 @@ export default function Home() {
       {/* TABS RESULTADOS */}
       {activeTab === 'resultados' && res && res.metricas && (
         <div className="max-w-7xl mx-auto animate-in fade-in zoom-in duration-300">
-          {/* Dashboard Resumen KPI */}
+          {/* DASHBOARD PROFESIONAL V3.4 — JERARQUÍA DE DECISIÓN */}
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm mb-6 border border-slate-200 dark:border-slate-700 print:shadow-none print:border-none">
-             <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
+             <div className="flex justify-between items-start gap-4 mb-6 border-b border-slate-100 dark:border-slate-700 pb-4 flex-wrap">
                 <div>
-                   <h2 className="text-2xl font-black text-slate-800 dark:text-white">{formData.nombre_idea || 'Proyecto sin nombre'}</h2>
-                   <p className="text-sm text-slate-500 dark:text-slate-400">Dictamen Financiero Profesional V3.4</p>
+                   <div className="flex items-center gap-2 flex-wrap">
+                     <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+                       {formData.nombre_idea || 'Proyecto sin nombre'}
+                     </h2>
+                     <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+                       MOTOR V3.4
+                     </span>
+                   </div>
+                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                     Resultados organizados para decidir: Proyecto → Inversionista → Tributación → Liquidez & Riesgo
+                   </p>
                 </div>
+
                 <div className="flex gap-2 print:hidden flex-wrap justify-end">
                    <button
                      onClick={() => guardarProyecto(false)}
@@ -1959,46 +2010,231 @@ export default function Home() {
                </div>
              )}
 
-             <div className={`p-6 rounded-2xl mb-8 text-center border-2 shadow-sm ${estadoRecomendacion.includes("INVERTIR") && !estadoRecomendacion.includes("NO") ? 'bg-emerald-50 border-emerald-400 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-300' : estadoRecomendacion.includes("NO") ? 'bg-rose-50 border-rose-400 text-rose-800 dark:bg-rose-900/20 dark:border-rose-600 dark:text-rose-300' : 'bg-amber-50 border-amber-400 text-amber-800 dark:bg-amber-900/20 dark:border-amber-600 dark:text-amber-300'}`}>
-                <h3 className="text-4xl font-black tracking-tight">{estadoRecomendacion}</h3>
-                <p className="font-medium mt-2 text-lg">{mensajeRecomendacion}</p>
+             {/* DICTAMEN PRINCIPAL */}
+             <div className={`p-5 md:p-6 rounded-2xl mb-6 border-2 shadow-sm ${
+               estadoRecomendacion.includes("INVERTIR") && !estadoRecomendacion.includes("NO")
+                 ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-200'
+                 : estadoRecomendacion.includes("NO")
+                   ? 'bg-rose-50 border-rose-400 text-rose-900 dark:bg-rose-900/20 dark:border-rose-600 dark:text-rose-200'
+                   : 'bg-amber-50 border-amber-400 text-amber-900 dark:bg-amber-900/20 dark:border-amber-600 dark:text-amber-200'
+             }`}>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] uppercase font-black tracking-widest opacity-70">Dictamen del motor</p>
+                    <h3 className="text-3xl md:text-4xl font-black tracking-tight mt-1">{estadoRecomendacion}</h3>
+                    <p className="font-medium mt-2 text-base md:text-lg max-w-4xl">{mensajeRecomendacion}</p>
+                  </div>
+
+                  <div className="flex gap-3 shrink-0">
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 border border-current/10 px-4 py-3 min-w-[110px]">
+                      <p className="text-[10px] uppercase font-black opacity-60">Score</p>
+                      <p className="text-2xl font-black">
+                        {scoreResultado === null ? '—' : `${scoreResultado.toFixed(0)}/100`}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 border border-current/10 px-4 py-3 min-w-[125px]">
+                      <p className="text-[10px] uppercase font-black opacity-60">Liquidez</p>
+                      <p className="text-sm font-black mt-1 max-w-[150px]">{estadoLiquidezResultado}</p>
+                    </div>
+                  </div>
+                </div>
              </div>
 
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 font-bold uppercase">Inversión Req.</p>
-                   <p className="text-2xl font-black dark:text-white">{formData.moneda} {Number(res.metricas?.inversion_total || 0).toLocaleString('es-PE')}</p>
-                </div>
-                <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 font-bold uppercase">Reserva ({formData.meses_reserva} Meses)</p>
-                   <p className={`text-2xl font-black ${alertaLiquidez.includes('⚠️') ? 'text-rose-500' : 'dark:text-white'}`}>{formData.moneda} {Number(res.metricas?.reserva_emergencia || 0).toLocaleString('es-PE')}</p>
-                   <p className="text-[10px] text-rose-500 leading-tight mt-1">{alertaLiquidez.includes('⚠️') ? alertaLiquidez : ''}</p>
-                </div>
-                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-200 dark:border-indigo-800">
-                   <p className="text-xs text-indigo-500 dark:text-indigo-400 font-bold uppercase flex items-center gap-1">VAN <InfoTooltip text="Valor Actual Neto: Dinero puro que ganarás a día de hoy, descontando tu tasa de riesgo." /></p>
-                   <p className={`text-3xl font-black ${(res.metricas?.van || 0) > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formData.moneda} {Number(res.metricas?.van || 0).toLocaleString('es-PE')}</p>
-                </div>
-                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-200 dark:border-indigo-800">
-                   <p className="text-xs text-indigo-500 dark:text-indigo-400 font-bold uppercase flex items-center gap-1">TIR <InfoTooltip text="Tasa Interna de Retorno: La rentabilidad real que te da el proyecto al año." /></p>
-                   <p className={`text-3xl font-black ${(res.metricas?.tir || 0) > formData.tasa_descuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{Number(res.metricas?.tir || 0).toFixed(1)}%</p>
-                </div>
-                <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 font-bold uppercase">Relación B/C</p>
-                   <p className="text-xl font-black dark:text-white">{Number(res.metricas?.b_c || 0).toFixed(2)}</p>
-                </div>
-                <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 font-bold uppercase flex items-center gap-1">Payback <InfoTooltip text="Mes en el que recuperas toda tu inversión inicial." /></p>
-                   <p className="text-xl font-black dark:text-white">{typeof res.base?.mes_recuperacion === 'number' ? `Mes ${res.base.mes_recuperacion}` : '+3 Años'}</p>
-                </div>
-                <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 font-bold uppercase flex items-center gap-1">Punto Eq. <InfoTooltip text="Ventas mínimas mensuales para no quebrar." /></p>
-                   <p className="text-xl font-black dark:text-white">{res.metricas?.punto_equilibrio || 0} <span className="text-xs font-normal text-slate-500">v/m</span></p>
-                </div>
-                <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 font-bold uppercase flex items-center gap-1">ROI Directo <InfoTooltip text="Retorno sobre la Inversión simple al mes 36." /></p>
-                   <p className="text-xl font-black dark:text-white">{Number(res.metricas?.roi || 0).toFixed(1)}%</p>
-                </div>
-             </div>
+             {/* 1. PROYECTO */}
+             <section className="mb-5">
+               <div className="flex items-center justify-between gap-3 mb-3">
+                 <div>
+                   <h3 className="text-lg font-black text-slate-900 dark:text-white">1. Proyecto</h3>
+                   <p className="text-xs text-slate-500 dark:text-slate-400">Creación de valor y recuperación de la inversión.</p>
+                 </div>
+                 <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                   vanResultado > 0 && bcResultado > 1
+                     ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                     : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
+                 }`}>
+                   {vanResultado > 0 && bcResultado > 1 ? 'CREA VALOR' : 'REVISAR VIABILIDAD'}
+                 </span>
+               </div>
+
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                 <div className="p-5 rounded-xl border-2 border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20">
+                   <p className="text-xs text-indigo-600 dark:text-indigo-400 font-black uppercase flex items-center gap-1">
+                     VAN
+                     <InfoTooltip text="Valor Actual Neto: valor económico creado por el proyecto después de descontar la tasa exigida." />
+                   </p>
+                   <p className={`text-3xl font-black mt-1 ${vanResultado > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                     {monedaResultado} {vanResultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                     Indicador principal de creación de valor.
+                   </p>
+                 </div>
+
+                 <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-xs text-slate-500 font-black uppercase">Relación B/C</p>
+                   <p className={`text-2xl font-black mt-1 ${bcResultado > 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                     {bcResultado.toFixed(2)}
+                   </p>
+                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                     {bcResultado > 1 ? 'Beneficios superiores a costos.' : 'Beneficios no superan costos.'}
+                   </p>
+                 </div>
+
+                 <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-xs text-slate-500 font-black uppercase flex items-center gap-1">
+                     Payback
+                     <InfoTooltip text="Periodo estimado para recuperar la inversión inicial." />
+                   </p>
+                   <p className="text-2xl font-black dark:text-white mt-1">
+                     {paybackResultado === null ? '+3 años / sin dato' : `Mes ${Number(paybackResultado).toFixed(0)}`}
+                   </p>
+                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">Velocidad de recuperación.</p>
+                 </div>
+
+                 <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-xs text-slate-500 font-black uppercase flex items-center gap-1">
+                     TIR
+                     <InfoTooltip text="Tasa Interna de Retorno. Interprétala junto con VAN, B/C y payback; una TIR muy alta no reemplaza esos indicadores." />
+                   </p>
+                   <p className={`text-xl font-black mt-1 ${tirResultado > Number(formData.tasa_descuento || 0) ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                     {tirResultado.toFixed(1)}%
+                   </p>
+                   {tirMuyAlta ? (
+                     <p className="text-[11px] text-amber-700 dark:text-amber-300 font-bold mt-2">
+                       TIR extraordinariamente alta: prioriza VAN, B/C y payback para decidir.
+                     </p>
+                   ) : (
+                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                       Tasa de descuento: {Number(formData.tasa_descuento || 0).toFixed(1)}%.
+                     </p>
+                   )}
+                 </div>
+               </div>
+             </section>
+
+             {/* 2. INVERSIONISTA */}
+             <section className="mb-5">
+               <div className="mb-3">
+                 <h3 className="text-lg font-black text-slate-900 dark:text-white">2. Inversionista</h3>
+                 <p className="text-xs text-slate-500 dark:text-slate-400">Cuánto capital comprometes y qué retorno directo muestra el modelo.</p>
+               </div>
+
+               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Capital disponible</p>
+                   <p className="text-xl font-black dark:text-white mt-1">
+                     {monedaResultado} {capitalResultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Inversión requerida</p>
+                   <p className="text-xl font-black dark:text-white mt-1">
+                     {monedaResultado} {inversionResultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                 </div>
+
+                 <div className={`p-4 rounded-xl border ${
+                   saldoCapitalResultado >= 0
+                     ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20'
+                     : 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20'
+                 }`}>
+                   <p className="text-[10px] uppercase font-black text-slate-500">Capital − inversión</p>
+                   <p className={`text-xl font-black mt-1 ${saldoCapitalResultado >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
+                     {monedaResultado} {saldoCapitalResultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20">
+                   <p className="text-[10px] uppercase font-black text-violet-600 dark:text-violet-400 flex items-center gap-1">
+                     ROI 36 meses
+                     <InfoTooltip text="Retorno sobre la inversión calculado por el motor para el horizonte del modelo." />
+                   </p>
+                   <p className="text-xl font-black text-violet-800 dark:text-violet-300 mt-1">{roiResultado.toFixed(1)}%</p>
+                 </div>
+               </div>
+             </section>
+
+             {/* 3. TRIBUTACIÓN */}
+             <section className="mb-5">
+               <div className="mb-3">
+                 <h3 className="text-lg font-black text-slate-900 dark:text-white">3. Tributación</h3>
+                 <p className="text-xs text-slate-500 dark:text-slate-400">Régimen elegido e impuestos incorporados en los 36 meses proyectados.</p>
+               </div>
+
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Régimen tributario</p>
+                   <p className="text-lg font-black dark:text-white mt-1">{formData.regimen_tributario}</p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Impuestos proyectados 36M</p>
+                   <p className="text-lg font-black dark:text-white mt-1">
+                     {monedaResultado} {impuestos36Resultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Promedio mensual</p>
+                   <p className="text-lg font-black dark:text-white mt-1">
+                     {monedaResultado} {promedioImpuestoMensualResultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                 </div>
+               </div>
+             </section>
+
+             {/* 4. LIQUIDEZ & RIESGO */}
+             <section>
+               <div className="mb-3">
+                 <h3 className="text-lg font-black text-slate-900 dark:text-white">4. Liquidez & Riesgo</h3>
+                 <p className="text-xs text-slate-500 dark:text-slate-400">Capacidad para soportar meses difíciles y exposición del proyecto.</p>
+               </div>
+
+               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500 flex items-center gap-1">
+                     Reserva ({formData.meses_reserva} meses)
+                     <InfoTooltip text="Colchón de liquidez objetivo para soportar meses difíciles." />
+                   </p>
+                   <p className={`text-xl font-black mt-1 ${alertaLiquidez.includes('⚠️') ? 'text-rose-600 dark:text-rose-400' : 'dark:text-white'}`}>
+                     {monedaResultado} {reservaResultado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}
+                   </p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Punto de equilibrio</p>
+                   <p className="text-xl font-black dark:text-white mt-1">
+                     {puntoEquilibrioResultado.toLocaleString('es-PE', { maximumFractionDigits: 0 })}
+                     <span className="text-xs font-medium text-slate-500"> ventas/mes</span>
+                   </p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Prob. de pérdida</p>
+                   <p className="text-xl font-black dark:text-white mt-1">
+                     {probabilidadPerdidaResultado === null ? 'Sin dato' : `${probabilidadPerdidaResultado.toFixed(0)}%`}
+                   </p>
+                 </div>
+
+                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                   <p className="text-[10px] uppercase font-black text-slate-500">Estado de liquidez</p>
+                   <p className={`text-sm font-black mt-1 ${alertaLiquidez.includes('⚠️') ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                     {estadoLiquidezResultado}
+                   </p>
+                 </div>
+               </div>
+
+               {alertaLiquidez && (
+                 <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-bold border ${
+                   alertaLiquidez.includes('⚠️')
+                     ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                     : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                 }`}>
+                   {alertaLiquidez}
+                 </div>
+               )}
+             </section>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
