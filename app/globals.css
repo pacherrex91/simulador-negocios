@@ -1,26 +1,67 @@
 @import "tailwindcss";
 
+/*
+  Tailwind CSS 4:
+  por defecto, `dark:` responde a prefers-color-scheme.
+  Esta variante hace que `dark:` responda a la clase `.dark`
+  que page.tsx agrega/quita en <html>.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html.dark {
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+}
+
+/* Scrollbars usados por la interfaz */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+html.dark .custom-scrollbar {
+  scrollbar-color: #475569 transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* Impresión siempre clara */
+@media print {
+  html,
+  html.dark {
+    color-scheme: light;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
 }
