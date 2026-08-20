@@ -179,6 +179,11 @@ export default function Home() {
   const [proyectoActualId, setProyectoActualId] = useState<string | null>(null);
   const [guardandoProyecto, setGuardandoProyecto] = useState(false);
   const [mensajeProyecto, setMensajeProyecto] = useState('');
+
+  // --- COMPARADOR + RANKING DE PROYECTOS ---
+  const [proyectosSeleccionadosIds, setProyectosSeleccionadosIds] = useState<string[]>([]);
+  const [comparadorAbierto, setComparadorAbierto] = useState(false);
+  const [rankingAbierto, setRankingAbierto] = useState(false);
   
   const [formData, setFormData] = useState<any>({
     nombre_idea: "", sector: "", moneda: "S/", capital_disponible: 25000,
@@ -263,8 +268,17 @@ export default function Home() {
     } else {
       setProyectos([]);
       setProyectoActualId(null);
+      setProyectosSeleccionadosIds([]);
+      setComparadorAbierto(false);
+      setRankingAbierto(false);
     }
   }, [authUser?.id]);
+
+  useEffect(() => {
+    setProyectosSeleccionadosIds((actuales) =>
+      actuales.filter((id) => proyectos.some((proyecto) => proyecto.id === id))
+    );
+  }, [proyectos]);
 
   const autenticar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -523,9 +537,93 @@ export default function Home() {
     }
 
     if (proyectoActualId === proyecto.id) setProyectoActualId(null);
+    setProyectosSeleccionadosIds((actuales) => actuales.filter((id) => id !== proyecto.id));
     setMensajeProyecto('Proyecto eliminado.');
     await cargarProyectos(authUser.id);
   };
+
+  const alternarSeleccionProyecto = (proyectoId: string) => {
+    if (proyectosSeleccionadosIds.includes(proyectoId)) {
+      const nuevaSeleccion = proyectosSeleccionadosIds.filter((id) => id !== proyectoId);
+      setProyectosSeleccionadosIds(nuevaSeleccion);
+      if (nuevaSeleccion.length < 2) setComparadorAbierto(false);
+      setMensajeProyecto('');
+      return;
+    }
+
+    if (proyectosSeleccionadosIds.length >= 4) {
+      setMensajeProyecto('Puedes comparar como máximo 4 proyectos a la vez.');
+      return;
+    }
+
+    setProyectosSeleccionadosIds([...proyectosSeleccionadosIds, proyectoId]);
+    setMensajeProyecto('');
+  };
+
+  const limpiarSeleccionComparador = () => {
+    setProyectosSeleccionadosIds([]);
+    setComparadorAbierto(false);
+    setMensajeProyecto('');
+  };
+
+  const abrirComparador = () => {
+    if (proyectosSeleccionadosIds.length < 2) {
+      setMensajeProyecto('Selecciona al menos 2 proyectos para comparar.');
+      return;
+    }
+
+    setComparadorAbierto(true);
+    setRankingAbierto(false);
+    setMensajeProyecto('');
+  };
+
+  const proyectosSeleccionados = proyectos.filter((proyecto) =>
+    proyectosSeleccionadosIds.includes(proyecto.id)
+  );
+
+  const obtenerMetricasProyecto = (proyecto: ProyectoGuardado) => {
+    const financial = proyecto.financial_results || {};
+    const metricas = financial.metricas || {};
+    const proyectoMetricas = metricas.proyecto || financial.proyecto || {};
+
+    return {
+      inversion: Number(metricas.inversion_total ?? proyectoMetricas.inversion_inicial ?? 0),
+      van: Number(metricas.van ?? proyectoMetricas.van ?? 0),
+      tir: Number(metricas.tir ?? proyectoMetricas.tir ?? 0),
+      roi: Number(metricas.roi ?? proyectoMetricas.roi ?? 0),
+      bc: Number(metricas.b_c ?? proyectoMetricas.b_c ?? 0),
+      payback:
+        metricas.payback_meses ??
+        proyectoMetricas.payback_meses ??
+        financial.base?.payback_meses ??
+        null,
+      liquidez: String(metricas.estado_liquidez ?? 'Sin dato'),
+      riesgo:
+        financial.riesgo?.probabilidad_perdida ??
+        metricas.probabilidad_perdida ??
+        null,
+      score: Number(metricas.score ?? 0),
+      recomendacion:
+        metricas.recomendacion?.estado ??
+        metricas.recomendacion ??
+        'Sin dictamen',
+      moneda: proyecto.inputs?.moneda || 'S/',
+    };
+  };
+
+  const proyectosRanking = [...proyectos].sort((a, b) => {
+    const ma = obtenerMetricasProyecto(a);
+    const mb = obtenerMetricasProyecto(b);
+
+    if (mb.score !== ma.score) return mb.score - ma.score;
+    if (mb.van !== ma.van) return mb.van - ma.van;
+    if (mb.bc !== ma.bc) return mb.bc - ma.bc;
+    return ma.payback === null
+      ? 1
+      : mb.payback === null
+        ? -1
+        : Number(ma.payback) - Number(mb.payback);
+  });
 
   const invTotal = invItems.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0);
   const gastoTotal = gastoItems.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0);
@@ -721,7 +819,20 @@ export default function Home() {
                <div className="space-y-6">
                  <div>
                     <h3 className="font-bold text-indigo-600 dark:text-indigo-400 border-b border-indigo-100 dark:border-indigo-900/50 pb-2 mb-3">Datos del Negocio</h3>
-                    <input type="text" placeholder="Nombre Idea" value={formData.nombre_idea} onChange={e=>setFormData({...formData, nombre_idea: e.target.value})} className="w-full p-2 mb-2 border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 dark:text-white outline-none focus:border-indigo-500" />
+                    <div className="mb-2">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 mb-1">
+                        Nombre de la idea
+                        <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">EDITABLE</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Cafetería de Especialidad"
+                        value={formData.nombre_idea}
+                        onChange={e=>setFormData({...formData, nombre_idea: e.target.value})}
+                        title="Haz clic aquí para editar el nombre del negocio"
+                        className="w-full p-2.5 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 dark:text-white outline-none cursor-text shadow-sm transition-all hover:border-indigo-300 dark:hover:border-indigo-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
+                      />
+                    </div>
                     <div className="flex gap-2">
                        <select value={formData.moneda} onChange={e=>setFormData({...formData, moneda:e.target.value})} className="cursor-pointer p-2 border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 dark:text-white w-24 outline-none"><option>S/</option><option>USD</option></select>
                        <input type="number" placeholder="Capital Disponible" value={formData.capital_disponible} onChange={e=>setFormData({...formData, capital_disponible: Number(e.target.value)})} className="w-full p-2 border-2 border-emerald-400 dark:border-emerald-600 rounded bg-emerald-50 dark:bg-slate-900 dark:text-emerald-400 font-bold outline-none" />
@@ -744,8 +855,33 @@ export default function Home() {
                  <div>
                     <h3 className="font-bold text-indigo-600 dark:text-indigo-400 border-b border-indigo-100 dark:border-indigo-900/50 pb-2 mb-3 flex items-center">Parámetros Financieros (Avanzado) <InfoTooltip text="Tasas usadas para el cálculo del Valor Actual Neto e Impuestos." /></h3>
                     <div className="grid grid-cols-2 gap-2">
-                       <div><label className="text-xs font-bold dark:text-slate-300">Tasa Descuento VAN (%)</label><input type="number" value={formData.tasa_descuento} onChange={e=>setFormData({...formData, tasa_descuento: Number(e.target.value)})} className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 dark:text-white outline-none focus:border-indigo-500" /></div>
-                       <div><label className="text-xs font-bold dark:text-slate-300">Reserva Seguridad</label><select value={formData.meses_reserva} onChange={e=>setFormData({...formData, meses_reserva: Number(e.target.value)})} className="cursor-pointer w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 dark:text-white outline-none"><option value="3">3 Meses</option><option value="6">6 Meses</option><option value="12">1 Año</option></select></div>
+                       <div>
+                         <label className="text-xs font-bold dark:text-slate-300 flex items-center">
+                           Tasa Descuento VAN (%)
+                           <InfoTooltip text="Tasa anual mínima de rentabilidad que exiges al proyecto. Se usa para traer los flujos futuros a valor presente y calcular el VAN. A mayor tasa de descuento, menor será el VAN." />
+                         </label>
+                         <input
+                           type="number"
+                           value={formData.tasa_descuento}
+                           onChange={e=>setFormData({...formData, tasa_descuento: Number(e.target.value)})}
+                           className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 dark:text-white outline-none transition-all hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
+                         />
+                       </div>
+                       <div>
+                         <label className="text-xs font-bold dark:text-slate-300 flex items-center">
+                           Reserva Seguridad
+                           <InfoTooltip text="Colchón de liquidez expresado en meses de gastos fijos. Es una meta de caja para soportar meses difíciles; no se suma automáticamente como costo de apertura." />
+                         </label>
+                         <select
+                           value={formData.meses_reserva}
+                           onChange={e=>setFormData({...formData, meses_reserva: Number(e.target.value)})}
+                           className="cursor-pointer w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 dark:text-white outline-none transition-all hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
+                         >
+                           <option value="3">3 Meses</option>
+                           <option value="6">6 Meses</option>
+                           <option value="12">1 Año</option>
+                         </select>
+                       </div>
                     </div>
                     <div className="mt-2">
                       <label className="text-xs font-bold block mb-1 dark:text-slate-300">Régimen Tributario</label>
@@ -766,11 +902,32 @@ export default function Home() {
                     <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                       {invItems.map((item) => (
                          <div key={item.id} className="flex gap-2 items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <input type="text" value={item.nombre} onChange={e=>updateInv(item.id, 'nombre', e.target.value)} placeholder="Ej. Horno" className="flex-1 bg-transparent text-sm outline-none w-20 dark:text-white" />
-                            <select value={item.categoria} onChange={e=>updateInv(item.id, 'categoria', e.target.value)} className="cursor-pointer w-24 text-xs bg-transparent outline-none dark:text-slate-300">
+                            <div className="relative flex-1 min-w-0">
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-indigo-400 text-xs">✎</span>
+                              <input
+                                type="text"
+                                value={item.nombre}
+                                onChange={e=>updateInv(item.id, 'nombre', e.target.value)}
+                                placeholder="Ej. Horno"
+                                title="Editable: nombre de la inversión"
+                                className="w-full pr-7 pl-2 py-1.5 bg-white dark:bg-slate-800 text-sm outline-none rounded-md border border-slate-300 dark:border-slate-600 dark:text-white cursor-text transition-all hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
+                              />
+                            </div>
+                            <select
+                              value={item.categoria}
+                              onChange={e=>updateInv(item.id, 'categoria', e.target.value)}
+                              title="Editable: categoría de la inversión"
+                              className="cursor-pointer w-24 text-xs bg-white dark:bg-slate-800 px-1.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 outline-none dark:text-slate-200 hover:border-indigo-300 focus:border-indigo-500"
+                            >
                               {CATEGORIAS_ITEMS.map(c=><option key={c}>{c}</option>)}
                             </select>
-                            <input type="number" value={item.monto} onChange={e=>updateInv(item.id, 'monto', Number(e.target.value))} className="w-20 text-sm bg-transparent outline-none font-bold dark:text-white" />
+                            <input
+                              type="number"
+                              value={item.monto}
+                              onChange={e=>updateInv(item.id, 'monto', Number(e.target.value))}
+                              title="Editable: monto de la inversión"
+                              className="w-20 text-sm bg-white dark:bg-slate-800 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 outline-none font-bold dark:text-white hover:border-indigo-300 focus:border-indigo-500"
+                            />
                             {item.categoria === 'Equipos' ? (
                               <input
                                 type="number"
@@ -798,11 +955,32 @@ export default function Home() {
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                       {gastoItems.map((item) => (
                          <div key={item.id} className="flex gap-2 items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <input type="text" value={item.nombre} onChange={e=>updateGas(item.id, 'nombre', e.target.value)} placeholder="Ej. Alquiler" className="flex-1 bg-transparent text-sm outline-none dark:text-white" />
-                            <select value={item.categoria} onChange={e=>updateGas(item.id, 'categoria', e.target.value)} className="cursor-pointer w-28 text-xs bg-transparent outline-none dark:text-slate-300">
+                            <div className="relative flex-1 min-w-0">
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-indigo-400 text-xs">✎</span>
+                              <input
+                                type="text"
+                                value={item.nombre}
+                                onChange={e=>updateGas(item.id, 'nombre', e.target.value)}
+                                placeholder="Ej. Alquiler"
+                                title="Editable: nombre del gasto fijo"
+                                className="w-full pr-7 pl-2 py-1.5 bg-white dark:bg-slate-800 text-sm outline-none rounded-md border border-slate-300 dark:border-slate-600 dark:text-white cursor-text transition-all hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
+                              />
+                            </div>
+                            <select
+                              value={item.categoria}
+                              onChange={e=>updateGas(item.id, 'categoria', e.target.value)}
+                              title="Editable: categoría del gasto"
+                              className="cursor-pointer w-28 text-xs bg-white dark:bg-slate-800 px-1.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 outline-none dark:text-slate-200 hover:border-indigo-300 focus:border-indigo-500"
+                            >
                               {CATEGORIAS_ITEMS.map(c=><option key={c}>{c}</option>)}
                             </select>
-                            <input type="number" value={item.monto} onChange={e=>updateGas(item.id, 'monto', Number(e.target.value))} className="w-24 text-sm bg-transparent outline-none font-bold dark:text-white" />
+                            <input
+                              type="number"
+                              value={item.monto}
+                              onChange={e=>updateGas(item.id, 'monto', Number(e.target.value))}
+                              title="Editable: monto mensual"
+                              className="w-24 text-sm bg-white dark:bg-slate-800 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 outline-none font-bold dark:text-white hover:border-indigo-300 focus:border-indigo-500"
+                            />
                             <button onClick={()=>setGastoItems(gastoItems.filter(x=>x.id!==item.id))} className="cursor-pointer text-rose-500 hover:text-rose-700 font-bold px-2">✕</button>
                          </div>
                       ))}
@@ -835,9 +1013,9 @@ export default function Home() {
 
       {/* MIS PROYECTOS */}
       {activeTab === 'proyectos' && (
-        <div className="max-w-6xl mx-auto space-y-6 print:hidden">
+        <div className="max-w-7xl mx-auto space-y-6 print:hidden">
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-2xl font-black text-slate-800 dark:text-white">Mis Proyectos</h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -853,9 +1031,242 @@ export default function Home() {
               </button>
             </div>
 
+            {authUser && proyectos.length > 0 && (
+              <div className="mb-5 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-black text-indigo-800 dark:text-indigo-300">
+                      ⚖️ Comparador de proyectos
+                    </p>
+                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 mt-1">
+                      Marca la casilla “Comparar” de 2 a 4 proyectos. Luego pulsa “Comparar proyectos”.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-sm font-black text-indigo-700 dark:text-indigo-300">
+                      {proyectosSeleccionadosIds.length}/4 seleccionados
+                    </span>
+
+                    <button
+                      onClick={abrirComparador}
+                      disabled={proyectosSeleccionadosIds.length < 2}
+                      className="cursor-pointer px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      ⚖️ Comparar proyectos
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setRankingAbierto(!rankingAbierto);
+                        setComparadorAbierto(false);
+                      }}
+                      className="cursor-pointer px-4 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50"
+                    >
+                      🏆 {rankingAbierto ? 'Ocultar ranking' : 'Ver ranking'}
+                    </button>
+
+                    {proyectosSeleccionadosIds.length > 0 && (
+                      <button
+                        onClick={limpiarSeleccionComparador}
+                        className="cursor-pointer px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-300 dark:hover:bg-slate-600"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {mensajeProyecto && (
               <div className="mb-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 text-sm font-medium text-indigo-800 dark:text-indigo-300">
                 {mensajeProyecto}
+              </div>
+            )}
+
+            {/* COMPARACIÓN */}
+            {authUser && comparadorAbierto && proyectosSeleccionados.length >= 2 && (
+              <div className="mb-6 rounded-2xl border-2 border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="flex items-center justify-between gap-3 p-4 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-200 dark:border-indigo-800">
+                  <div>
+                    <h3 className="font-black text-xl text-indigo-800 dark:text-indigo-200">⚖️ Comparación financiera</h3>
+                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
+                      Compara entre {proyectosSeleccionados.length} proyectos. El motor no cambia los datos guardados.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setComparadorAbierto(false)}
+                    className="cursor-pointer px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-sm font-bold text-slate-700 dark:text-slate-200"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[850px] text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700">
+                        <th className="sticky left-0 z-10 bg-slate-50 dark:bg-slate-900 text-left p-3 font-black text-slate-700 dark:text-slate-200 min-w-[150px]">
+                          Indicador
+                        </th>
+                        {proyectosSeleccionados.map((proyecto) => (
+                          <th key={proyecto.id} className="p-3 text-left min-w-[190px]">
+                            <div className="font-black text-slate-800 dark:text-white">
+                              {proyecto.project_name || 'Proyecto sin nombre'}
+                            </div>
+                            <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400 mt-1">
+                              {proyecto.updated_at
+                                ? new Date(proyecto.updated_at).toLocaleDateString('es-PE')
+                                : ''}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        {
+                          label: 'Inversión inicial',
+                          render: (p: ProyectoGuardado) => {
+                            const m = obtenerMetricasProyecto(p);
+                            return `${m.moneda} ${m.inversion.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`;
+                          },
+                        },
+                        {
+                          label: 'VAN',
+                          render: (p: ProyectoGuardado) => {
+                            const m = obtenerMetricasProyecto(p);
+                            return `${m.moneda} ${m.van.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`;
+                          },
+                        },
+                        {
+                          label: 'TIR',
+                          render: (p: ProyectoGuardado) => `${obtenerMetricasProyecto(p).tir.toFixed(1)}%`,
+                        },
+                        {
+                          label: 'ROI',
+                          render: (p: ProyectoGuardado) => `${obtenerMetricasProyecto(p).roi.toFixed(1)}%`,
+                        },
+                        {
+                          label: 'B/C',
+                          render: (p: ProyectoGuardado) => obtenerMetricasProyecto(p).bc.toFixed(2),
+                        },
+                        {
+                          label: 'Payback',
+                          render: (p: ProyectoGuardado) => {
+                            const payback = obtenerMetricasProyecto(p).payback;
+                            return payback === null || payback === undefined
+                              ? 'No recupera / sin dato'
+                              : `${Number(payback).toFixed(2)} meses`;
+                          },
+                        },
+                        {
+                          label: 'Liquidez',
+                          render: (p: ProyectoGuardado) => obtenerMetricasProyecto(p).liquidez,
+                        },
+                        {
+                          label: 'Riesgo',
+                          render: (p: ProyectoGuardado) => {
+                            const riesgo = obtenerMetricasProyecto(p).riesgo;
+                            return riesgo === null || riesgo === undefined
+                              ? 'Sin dato'
+                              : `${Number(riesgo).toFixed(0)}%`;
+                          },
+                        },
+                        {
+                          label: 'Score',
+                          render: (p: ProyectoGuardado) => `${obtenerMetricasProyecto(p).score.toFixed(0)}/100`,
+                        },
+                        {
+                          label: 'Dictamen',
+                          render: (p: ProyectoGuardado) => obtenerMetricasProyecto(p).recomendacion,
+                        },
+                      ].map((fila) => (
+                        <tr key={fila.label} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                          <td className="sticky left-0 z-10 bg-slate-50 dark:bg-slate-900 p-3 font-black text-slate-600 dark:text-slate-300">
+                            {fila.label}
+                          </td>
+                          {proyectosSeleccionados.map((proyecto) => (
+                            <td key={`${fila.label}-${proyecto.id}`} className="p-3 font-bold text-slate-800 dark:text-slate-100 align-top">
+                              {fila.render(proyecto)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/70 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Consejo: prioriza VAN, B/C, payback, liquidez, riesgo y sensibilidad. Una TIR muy alta por sí sola no garantiza que un proyecto sea superior.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* RANKING */}
+            {authUser && rankingAbierto && proyectos.length > 0 && (
+              <div className="mb-6 rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/10 p-4">
+                <div className="mb-4">
+                  <h3 className="font-black text-xl text-amber-900 dark:text-amber-200">🏆 Ranking automático</h3>
+                  <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-1">
+                    Ordenado primero por Score del motor V3.4; en empate, por VAN, B/C y menor payback.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {proyectosRanking.map((proyecto, index) => {
+                    const m = obtenerMetricasProyecto(proyecto);
+                    return (
+                      <div
+                        key={proyecto.id}
+                        className="grid grid-cols-[46px_minmax(180px,1fr)_90px_130px_90px] gap-3 items-center rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 px-3 py-3"
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${
+                          index === 0
+                            ? 'bg-amber-400 text-amber-950'
+                            : index === 1
+                              ? 'bg-slate-300 text-slate-800'
+                              : index === 2
+                                ? 'bg-orange-200 text-orange-900'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {index + 1}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="font-black text-slate-800 dark:text-white truncate">
+                            {proyecto.project_name || 'Proyecto sin nombre'}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {m.recomendacion}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-slate-500">Score</p>
+                          <p className="font-black text-slate-800 dark:text-white">{m.score.toFixed(0)}/100</p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-slate-500">VAN</p>
+                          <p className="font-black text-slate-800 dark:text-white truncate">
+                            {m.moneda} {m.van.toLocaleString('es-PE', { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => abrirProyecto(proyecto)}
+                          className="cursor-pointer px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-amber-950 text-sm font-black"
+                        >
+                          Abrir
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -876,7 +1287,7 @@ export default function Home() {
                 <div className="text-5xl mb-3">📁</div>
                 <p className="font-bold text-slate-700 dark:text-slate-200">Aún no tienes proyectos asociados a esta cuenta.</p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                  Los proyectos históricos sin usuario se migrarán de forma segura antes de activar RLS.
+                  Crea una simulación y guárdala para verla aquí.
                 </p>
                 <button
                   onClick={() => setActiveTab('simulador')}
@@ -890,18 +1301,53 @@ export default function Home() {
                 {proyectos.map((proyecto) => {
                   const metricas = proyecto.financial_results?.metricas || {};
                   const fecha = proyecto.updated_at || proyecto.created_at;
+                  const seleccionado = proyectosSeleccionadosIds.includes(proyecto.id);
+
                   return (
-                    <div key={proyecto.id} className={`rounded-2xl border p-5 ${proyectoActualId === proyecto.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40'}`}>
+                    <div
+                      key={proyecto.id}
+                      className={`rounded-2xl border p-5 transition-all ${
+                        seleccionado
+                          ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 ring-2 ring-violet-200 dark:ring-violet-900'
+                          : proyectoActualId === proyecto.id
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40'
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="font-black text-lg text-slate-800 dark:text-white">{proyecto.project_name || 'Proyecto sin nombre'}</h3>
+                        <div className="min-w-0">
+                          <label className="inline-flex items-center gap-2 mb-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={seleccionado}
+                              onChange={() => alternarSeleccionProyecto(proyecto.id)}
+                              className="w-4 h-4 accent-violet-600 cursor-pointer"
+                            />
+                            <span className="text-xs font-black text-violet-700 dark:text-violet-300">
+                              Comparar
+                            </span>
+                          </label>
+
+                          <h3 className="font-black text-lg text-slate-800 dark:text-white">
+                            {proyecto.project_name || 'Proyecto sin nombre'}
+                          </h3>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             {fecha ? `Actualizado: ${new Date(fecha).toLocaleString('es-PE')}` : 'Sin fecha'}
                           </p>
                         </div>
-                        {proyectoActualId === proyecto.id && (
-                          <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-indigo-600 text-white">ABIERTO</span>
-                        )}
+
+                        <div className="flex flex-col items-end gap-2">
+                          {seleccionado && (
+                            <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-violet-600 text-white">
+                              SELECCIONADO
+                            </span>
+                          )}
+                          {proyectoActualId === proyecto.id && (
+                            <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-indigo-600 text-white">
+                              ABIERTO
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-2 mt-4">
@@ -920,9 +1366,25 @@ export default function Home() {
                       </div>
 
                       <div className="flex flex-wrap gap-2 mt-4">
-                        <button onClick={() => abrirProyecto(proyecto)} className="cursor-pointer px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500">Abrir</button>
-                        <button onClick={() => duplicarProyecto(proyecto)} disabled={guardandoProyecto} className="cursor-pointer px-3 py-2 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-sm font-bold hover:bg-violet-200 dark:hover:bg-violet-900/50 disabled:opacity-60">Duplicar</button>
-                        <button onClick={() => eliminarProyecto(proyecto)} className="cursor-pointer px-3 py-2 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-sm font-bold hover:bg-rose-200 dark:hover:bg-rose-900/50">Eliminar</button>
+                        <button
+                          onClick={() => abrirProyecto(proyecto)}
+                          className="cursor-pointer px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500"
+                        >
+                          Abrir
+                        </button>
+                        <button
+                          onClick={() => duplicarProyecto(proyecto)}
+                          disabled={guardandoProyecto}
+                          className="cursor-pointer px-3 py-2 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-sm font-bold hover:bg-violet-200 dark:hover:bg-violet-900/50 disabled:opacity-60"
+                        >
+                          Duplicar
+                        </button>
+                        <button
+                          onClick={() => eliminarProyecto(proyecto)}
+                          className="cursor-pointer px-3 py-2 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-sm font-bold hover:bg-rose-200 dark:hover:bg-rose-900/50"
+                        >
+                          Eliminar
+                        </button>
                       </div>
                     </div>
                   );
